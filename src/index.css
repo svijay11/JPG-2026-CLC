@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    background-color: #faf8f5; /* Control panel side background */
+  }
+
+  body {
+    @apply antialiased font-sansUI text-luxury-charcoal;
+  }
+
+  /* Custom scrollbar styling for the control panel scroll area */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #faf8f5;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #e2dfda;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #c9a84c;
+  }
+}
