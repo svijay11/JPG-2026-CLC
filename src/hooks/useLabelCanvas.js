@@ -403,6 +403,8 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
     labelText,
     selectedFont,
     isRepositioning,
+    uvEnabled,
+    textColor,
     fontsLoaded,
     setHasTextOverflow
   ]);

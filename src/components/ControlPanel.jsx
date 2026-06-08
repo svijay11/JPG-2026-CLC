@@ -43,7 +43,7 @@ export default function ControlPanel({
         {/* Title Block */}
         <div className="space-y-1">
           <h1 className="text-3xl font-serifHeading font-bold text-luxury-charcoal tracking-wide">
-            AuraPrint
+            Idyll Time Wines
           </h1>
           <h2 className="text-xs font-sansUI font-semibold tracking-widest text-luxury-gold uppercase">
             Custom Label Studio
@@ -67,33 +67,6 @@ export default function ControlPanel({
           onSelectMaterial={onSelectMaterial}
           disabled={isRepositioning}
         />
-
-        {/* UV Coating Toggle */}
-        <div className={`space-y-3 transition-opacity duration-300 ${isRepositioning ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 font-sansUI">7. UV Coating</h3>
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={uvEnabled}
-              onChange={onUvToggle}
-              disabled={isRepositioning}
-              className="w-4 h-4 text-luxury-gold bg-white border-gray-300 rounded"
-            />
-            <span className="text-sm text-gray-600">Add UV coating (+$1.00)</span>
-          </label>
-        </div>
-
-        {/* Text Color Picker */}
-        <div className={`space-y-3 transition-opacity duration-300 ${isRepositioning ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 font-sansUI">8. Text Color</h3>
-          <input
-            type="color"
-            value={textColor}
-            onChange={(e) => onTextColorChange(e.target.value)}
-            disabled={isRepositioning}
-            className="w-10 h-10 border border-gray-200 rounded"
-          />
-        </div>
 
         <hr className="border-gray-100" />
 
@@ -132,7 +105,7 @@ export default function ControlPanel({
 
         <hr className="border-gray-100" />
 
-          {/* Section 5: Text Input, Font Selector & Text Color */}
+          {/* Section 5: Typography, Text & Text Color */}
         <TextControls
           labelText={labelText}
           onTextChange={onTextChange}
@@ -140,14 +113,41 @@ export default function ControlPanel({
           onFontChange={onFontChange}
           hasTextOverflow={hasTextOverflow}
           disabled={isRepositioning}
+          textColor={textColor}
+          onTextColorChange={onTextColorChange}
         />
 
         <hr className="border-gray-100" />
 
-        {/* Section 6: Quantity Selector */}
+        {/* Section 6: UV Coating */}
         <div className={`space-y-3 transition-opacity duration-300 ${isRepositioning ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
           <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 font-sansUI">
-            6. Quantity
+            6. UV Coating
+          </h3>
+          <label className="flex items-center space-x-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={uvEnabled}
+              onChange={onUvToggle}
+              disabled={isRepositioning}
+              className="w-4 h-4 accent-luxury-gold"
+            />
+            <div>
+              <span className="text-sm font-medium text-luxury-charcoal">Add UV Coating</span>
+              <span className="ml-2 text-xs text-gray-400">(+$1.00 / label)</span>
+            </div>
+          </label>
+          <p className="text-[10px] text-gray-400 leading-snug">
+            UV coating creates a raised, tactile texture — your label will look and feel premium to the touch.
+          </p>
+        </div>
+
+        <hr className="border-gray-100" />
+
+        {/* Section 7: Quantity Selector */}
+        <div className={`space-y-3 transition-opacity duration-300 ${isRepositioning ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 font-sansUI">
+            7. Quantity
           </h3>
           <div className="flex items-center space-x-3">
             <button
@@ -183,8 +183,13 @@ export default function ControlPanel({
       {/* Sticky Bottom Order Footer */}
       <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-6 md:p-8 shadow-[0_-8px_24px_rgba(0,0,0,0.03)] space-y-4">
         
-        {/* Pricing calculations */}
-        <div className="space-y-1.5 text-xs">
+        {/* Pricing note */}
+          <div className="text-[10px] text-gray-400 italic border border-gray-100 rounded p-2 bg-gray-50">
+            All prices are <span className="font-semibold text-gray-500">per label</span>. Every label includes standard <span className="font-semibold text-gray-500">4CP (4-color process)</span> printing at $1.00 / label.
+          </div>
+
+          {/* Pricing breakdown */}
+          <div className="space-y-1.5 text-xs">
           <div className="flex justify-between text-gray-500 font-medium">
             <span>Material: {selectedMaterial.replace('-', ' ').toUpperCase()}</span>
             <span>${unitPrice.toFixed(2)} / unit</span>
