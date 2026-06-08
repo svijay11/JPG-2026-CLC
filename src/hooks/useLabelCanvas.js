@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { SHAPES } from '../config/shapes';
 import { MATERIALS } from '../config/pricing';
 
-export const useLabelCanvas = (canvasRef, {
+export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
   selectedShape,
   selectedMaterial,
   uploadedImage,
@@ -188,6 +188,18 @@ export const useLabelCanvas = (canvasRef, {
     if (matPath) ctx.clip(matPath); else ctx.clip();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     applyMaterialOverlay(ctx, rect, selectedMaterial);
+  // UV coating overlay (subtle gloss)
+  if (uvEnabled) {
+    ctx.save();
+    ctx.translate(rect.x, rect.y);
+    ctx.scale(rect.width / shape.viewBoxWidth, rect.height / shape.viewBoxHeight);
+    const uvPath = defineShapePath(ctx);
+    if (uvPath) ctx.clip(uvPath); else ctx.clip();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'; // light UV shine
+    ctx.fillRect(rect.x - 10, rect.y - 10, rect.width + 20, rect.height + 20);
+    ctx.restore();
+  }
     ctx.restore();
 
     // Layer 4: Shape Outline (Unclipped, drawn in normal scale)
@@ -234,7 +246,7 @@ export const useLabelCanvas = (canvasRef, {
       } while (fontSize > 12);
 
       // Text styling
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = textColor || '#ffffff';
       ctx.font = `bold ${fontSize}px "${selectedFont}", serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';

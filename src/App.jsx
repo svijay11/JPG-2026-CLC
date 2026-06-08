@@ -20,7 +20,15 @@ export default function App() {
   const [labelText, setLabelText] = useState('');
   const [selectedFont, setSelectedFont] = useState('Playfair Display');
   const [isRepositioning, setIsRepositioning] = useState(false);
+  const [uvEnabled, setUvEnabled] = useState(false);
+  const [textColor, setTextColor] = useState('#000000');
   const [hasTextOverflow, setHasTextOverflow] = useState(false);
+
+  // UV toggle handler
+  const handleUvToggle = () => setUvEnabled((prev) => !prev);
+
+  // Text color change handler
+  const handleTextColorChange = (color) => setTextColor(color);
   const [quantity, setQuantity] = useState(10);
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -33,6 +41,8 @@ export default function App() {
     labelText,
     selectedFont,
     isRepositioning,
+    uvEnabled,
+    textColor,
     setHasTextOverflow
   });
 
@@ -94,6 +104,10 @@ export default function App() {
         quantity={quantity}
         onQuantityChange={setQuantity}
         onAddToCart={handleAddToCart}
+        uvEnabled={uvEnabled}
+        onUvToggle={handleUvToggle}
+        textColor={textColor}
+        onTextColorChange={handleTextColorChange}
       />
 
       {/* Global Toast Notification */}

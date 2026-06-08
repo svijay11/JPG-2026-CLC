@@ -61,9 +61,12 @@ export const MATERIALS = [
 
 export const STATIC_QUANTITY = 10;
 
-export const calculateTotal = (materialId, quantity = STATIC_QUANTITY) => {
+export const calculateTotal = (materialId, quantity = STATIC_QUANTITY, uvEnabled = false) => {
   const material = MATERIALS.find(m => m.id === materialId);
-  const unitPrice = material ? material.price : 1.50;
+  const basePrice = 1.00; // standard 4CP price per label
+  const materialAddon = material ? material.price : 0;
+  const uvAddon = uvEnabled ? 1.00 : 0;
+  const unitPrice = basePrice + materialAddon + uvAddon;
   return {
     unitPrice,
     quantity,

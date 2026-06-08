@@ -3,7 +3,7 @@ import ShapeSelector from './ShapeSelector';
 import MaterialSelector from './MaterialSelector';
 import ImageUploader from './ImageUploader';
 import TextControls from './TextControls';
-import { calculateTotal } from '../config/pricing';
+import { calculateTotal, STATIC_QUANTITY } from '../config/pricing';
 
 export default function ControlPanel({
   selectedShape,
@@ -25,10 +25,14 @@ export default function ControlPanel({
   hasTextOverflow,
   quantity,
   onQuantityChange,
-  onAddToCart
+  onAddToCart,
+  uvEnabled,
+  onUvToggle,
+  textColor,
+  onTextColorChange
 }) {
   // Calculate total pricing based on selected material and quantity
-  const { unitPrice, total } = calculateTotal(selectedMaterial, quantity);
+  const { unitPrice, total } = calculateTotal(selectedMaterial, quantity, uvEnabled);
 
   return (
     <div className="w-full lg:w-[40%] bg-luxury-white flex flex-col h-full border-t lg:border-t-0 lg:border-l border-gray-200 relative">
@@ -63,6 +67,33 @@ export default function ControlPanel({
           onSelectMaterial={onSelectMaterial}
           disabled={isRepositioning}
         />
+
+        {/* UV Coating Toggle */}
+        <div className={`space-y-3 transition-opacity duration-300 ${isRepositioning ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 font-sansUI">7. UV Coating</h3>
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={uvEnabled}
+              onChange={onUvToggle}
+              disabled={isRepositioning}
+              className="w-4 h-4 text-luxury-gold bg-white border-gray-300 rounded"
+            />
+            <span className="text-sm text-gray-600">Add UV coating (+$1.00)</span>
+          </label>
+        </div>
+
+        {/* Text Color Picker */}
+        <div className={`space-y-3 transition-opacity duration-300 ${isRepositioning ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 font-sansUI">8. Text Color</h3>
+          <input
+            type="color"
+            value={textColor}
+            onChange={(e) => onTextColorChange(e.target.value)}
+            disabled={isRepositioning}
+            className="w-10 h-10 border border-gray-200 rounded"
+          />
+        </div>
 
         <hr className="border-gray-100" />
 
@@ -101,7 +132,7 @@ export default function ControlPanel({
 
         <hr className="border-gray-100" />
 
-        {/* Section 5: Text Input & Font Selector */}
+          {/* Section 5: Text Input, Font Selector & Text Color */}
         <TextControls
           labelText={labelText}
           onTextChange={onTextChange}
@@ -121,7 +152,7 @@ export default function ControlPanel({
           <div className="flex items-center space-x-3">
             <button
               type="button"
-              onClick={() => onQuantityChange(Math.max(1, quantity - 1))}
+              onClick={() => onQuantityChange(Math.max(STATIC_QUANTITY, quantity - 1))}
               className="w-10 h-10 border border-gray-200 hover:border-luxury-gold hover:text-luxury-gold rounded-lg flex items-center justify-center font-bold text-lg transition-colors bg-white shadow-sm"
               aria-label="Decrease quantity"
             >
@@ -129,9 +160,9 @@ export default function ControlPanel({
             </button>
             <input
               type="number"
-              min="1"
+              min={STATIC_QUANTITY}
               value={quantity}
-              onChange={(e) => onQuantityChange(Math.max(1, parseInt(e.target.value) || 1))}
+              onChange={(e) => onQuantityChange(Math.max(STATIC_QUANTITY, parseInt(e.target.value) || STATIC_QUANTITY))}
               className="w-20 h-10 border border-gray-200 rounded-lg text-center font-bold text-luxury-charcoal focus:border-luxury-gold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none shadow-inner"
               aria-label="Quantity amount"
             />
@@ -162,6 +193,12 @@ export default function ControlPanel({
             <span>Quantity:</span>
             <span>{quantity} labels</span>
           </div>
+          {uvEnabled && (
+            <div className="flex justify-between text-gray-500 font-medium">
+              <span>UV Coating:</span>
+              <span>+${1.00.toFixed(2)}</span>
+            </div>
+          )}
           <div className="border-t border-dashed border-gray-100 my-2 pt-2 flex justify-between items-baseline">
             <span className="text-sm font-bold text-luxury-charcoal">Total:</span>
             <span className="text-xl font-bold text-luxury-gold">${total.toFixed(2)}</span>
