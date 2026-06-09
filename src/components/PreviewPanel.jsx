@@ -54,11 +54,6 @@ export default function PreviewPanel({
   return (
     <div className="flex-1 min-h-[350px] sm:h-full bg-luxury-charcoal flex flex-col items-center justify-center p-6 relative overflow-hidden select-none">
       
-      {/* Decorative Brand Accent (Luxury Boutique Vibe) */}
-      <div className="absolute top-6 left-6 text-[10px] tracking-[0.25em] font-bold text-gray-500 uppercase">
-        AuraPrint Live Mockup v1.0
-      </div>
-
       {/* Canvas Box */}
       <div className="relative shadow-2xl rounded border border-neutral-800 bg-neutral-900 overflow-hidden flex items-center justify-center">
         <canvas

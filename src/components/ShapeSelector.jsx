@@ -19,6 +19,10 @@ export default function ShapeSelector({ selectedShape, onSelectShape, disabled }
         {SHAPES.map((shape) => {
           const isSelected = selectedShape === shape.id;
           const Tag = shape.svgElement.tag;
+          const shapeMaxDimension = Math.max(shape.viewBoxWidth, shape.viewBoxHeight);
+          const previewScale = 100 / shapeMaxDimension;
+          const previewOffsetX = (100 - shape.viewBoxWidth * previewScale) / 2;
+          const previewOffsetY = (100 - shape.viewBoxHeight * previewScale) / 2;
 
           return (
             <button
@@ -36,15 +40,17 @@ export default function ShapeSelector({ selectedShape, onSelectShape, disabled }
               {/* Miniature SVG Preview */}
               <div className="w-12 h-12 flex items-center justify-center bg-gray-50 rounded p-1 border border-gray-100 mb-2">
                 <svg
-                  viewBox={`0 0 100 ${shape.viewBoxHeight}`}
+                  viewBox="0 0 100 100"
                   className="w-full h-full max-h-full max-w-full text-luxury-charcoal"
                 >
-                  <Tag
-                    {...shape.svgElement.props}
-                    stroke="currentColor"
-                    fill="white"
-                    strokeWidth={shape.id === 'circle' || shape.id === 'tall-label' || shape.id === 'squircle' ? 3 : 2}
-                  />
+                  <g transform={`translate(${previewOffsetX} ${previewOffsetY}) scale(${previewScale})`}>
+                    <Tag
+                      {...shape.svgElement.props}
+                      stroke="currentColor"
+                      fill="white"
+                      strokeWidth={shape.id === 'circle' || shape.id === 'tall-label' || shape.id === 'squircle' ? 3 : 2}
+                    />
+                  </g>
                 </svg>
               </div>
 

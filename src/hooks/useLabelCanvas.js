@@ -54,9 +54,10 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
     
     // Calculate the label bounding box centered on the 600x600 canvas
     const maxTargetSize = 420;
-    const scaleFactor = Math.min(maxTargetSize / shape.viewBoxWidth, maxTargetSize / shape.viewBoxHeight);
-    const rectWidth = shape.viewBoxWidth * scaleFactor;
-    const rectHeight = shape.viewBoxHeight * scaleFactor;
+    const shapeMaxDimension = Math.max(shape.viewBoxWidth, shape.viewBoxHeight);
+    const shapeScale = maxTargetSize / shapeMaxDimension;
+    const rectWidth = shape.viewBoxWidth * shapeScale;
+    const rectHeight = shape.viewBoxHeight * shapeScale;
     const rectX = 300 - rectWidth / 2;
     const rectY = 300 - rectHeight / 2;
     const rect = { x: rectX, y: rectY, width: rectWidth, height: rectHeight };
@@ -96,6 +97,11 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
       return null;
     };
 
+    const applyShapeTransform = (context) => {
+      context.translate(rect.x, rect.y);
+      context.scale(shapeScale, shapeScale);
+    };
+
     // Calculate Image Placement (cover fit)
     let imgDraw = null;
     if (uploadedImage) {
@@ -131,8 +137,7 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
 
     // Layer 1: Background Fill (Always Clipped to Shape)
     ctx.save();
-    ctx.translate(rect.x, rect.y);
-    ctx.scale(rect.width / shape.viewBoxWidth, rect.height / shape.viewBoxHeight);
+    applyShapeTransform(ctx);
     const bgPath = defineShapePath(ctx);
     if (bgPath) ctx.clip(bgPath); else ctx.clip();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -150,8 +155,7 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
       } else {
         // Draw clipped image
         ctx.save();
-        ctx.translate(rect.x, rect.y);
-        ctx.scale(rect.width / shape.viewBoxWidth, rect.height / shape.viewBoxHeight);
+        applyShapeTransform(ctx);
         const imgPath = defineShapePath(ctx);
         if (imgPath) ctx.clip(imgPath); else ctx.clip();
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -161,8 +165,7 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
     } else {
       // Placeholder Pattern (Always Clipped to Shape)
       ctx.save();
-      ctx.translate(rect.x, rect.y);
-      ctx.scale(rect.width / shape.viewBoxWidth, rect.height / shape.viewBoxHeight);
+      applyShapeTransform(ctx);
       const plPath = defineShapePath(ctx);
       if (plPath) ctx.clip(plPath); else ctx.clip();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -182,17 +185,25 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
 
     // Layer 3: Material Overlay (Always Clipped to Shape)
     ctx.save();
-    ctx.translate(rect.x, rect.y);
-    ctx.scale(rect.width / shape.viewBoxWidth, rect.height / shape.viewBoxHeight);
+    applyShapeTransform(ctx);
     const matPath = defineShapePath(ctx);
     if (matPath) ctx.clip(matPath); else ctx.clip();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     applyMaterialOverlay(ctx, rect, selectedMaterial);
+
+    // Draw a stronger outline after material change so the selected material shape is clearer
+    ctx.save();
+    applyShapeTransform(ctx);
+    ctx.strokeStyle = selectedMaterial.startsWith('foil') ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 2 / shapeScale;
+    const materialOutline = defineShapePath(ctx);
+    if (materialOutline) ctx.stroke(materialOutline);
+    ctx.restore();
+
   // UV coating overlay (subtle gloss)
   if (uvEnabled) {
     ctx.save();
-    ctx.translate(rect.x, rect.y);
-    ctx.scale(rect.width / shape.viewBoxWidth, rect.height / shape.viewBoxHeight);
+    applyShapeTransform(ctx);
     const uvPath = defineShapePath(ctx);
     if (uvPath) ctx.clip(uvPath); else ctx.clip();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -204,11 +215,10 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
 
     // Layer 4: Shape Outline (Unclipped, drawn in normal scale)
     ctx.save();
-    ctx.translate(rect.x, rect.y);
-    ctx.scale(rect.width / shape.viewBoxWidth, rect.height / shape.viewBoxHeight);
+    applyShapeTransform(ctx);
     
     ctx.strokeStyle = '#2d2d2d';
-    ctx.lineWidth = 1.5 * (shape.viewBoxWidth / rect.width); // Keep stroke constant at ~1.5px
+    ctx.lineWidth = 1.5 / shapeScale;
     
     const outlinePath = defineShapePath(ctx);
     if (outlinePath) {
@@ -298,8 +308,7 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
       
       // Nested shape matrix transform
       ctx.save();
-      ctx.translate(rect.x, rect.y);
-      ctx.scale(rect.width / shape.viewBoxWidth, rect.height / shape.viewBoxHeight);
+      applyShapeTransform(ctx);
       
       const repPath = defineShapePath(ctx);
       // Wait, to add it to context path:
@@ -312,8 +321,7 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
       // For evenodd clip, we need shape path drawn inside this path.
       // So instead of Path2D, we can draw it directly since we translated inside ctx.save()/restore()
       ctx.save();
-      ctx.translate(rect.x, rect.y);
-      ctx.scale(rect.width / shape.viewBoxWidth, rect.height / shape.viewBoxHeight);
+      applyShapeTransform(ctx);
       if (shape.pathType === 'circle') {
         ctx.arc(50, 50, 46, 0, Math.PI * 2);
       } else if (shape.pathType === 'roundRect') {
@@ -345,8 +353,7 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
       ctx.save();
       ctx.globalCompositeOperation = 'destination-out';
       ctx.fillStyle = '#ffffff'; // Color doesn't matter for destination-out
-      ctx.translate(rect.x, rect.y);
-      ctx.scale(rect.width / shape.viewBoxWidth, rect.height / shape.viewBoxHeight);
+      applyShapeTransform(ctx);
       
       if (shape.pathType === 'circle') {
         ctx.beginPath();
@@ -365,10 +372,9 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
 
       // Now draw a bright dashed highlight around the cut line to emphasize it
       ctx.save();
-      ctx.translate(rect.x, rect.y);
-      ctx.scale(rect.width / shape.viewBoxWidth, rect.height / shape.viewBoxHeight);
+      applyShapeTransform(ctx);
       ctx.strokeStyle = '#c9a84c'; // Gold cut line in reposition mode
-      ctx.lineWidth = 2 * (shape.viewBoxWidth / rect.width);
+      ctx.lineWidth = 2 / shapeScale;
       ctx.setLineDash([4, 4]);
       if (shape.pathType === 'circle') {
         ctx.beginPath();
@@ -418,39 +424,47 @@ const applyMaterialOverlay = (ctx, rect, materialId) => {
 
   if (material.overlayType === 'gradient') {
     if (materialId === 'digital-gold') {
-      gradient.addColorStop(0, 'rgba(212, 175, 55, 0.22)');
-      gradient.addColorStop(0.5, 'rgba(255, 235, 170, 0.12)');
-      gradient.addColorStop(1, 'rgba(180, 140, 30, 0.22)');
+      gradient.addColorStop(0, 'rgba(212, 175, 55, 0.30)');
+      gradient.addColorStop(0.5, 'rgba(255, 235, 170, 0.24)');
+      gradient.addColorStop(1, 'rgba(180, 140, 30, 0.30)');
     } else { // digital-silver
-      gradient.addColorStop(0, 'rgba(192, 192, 192, 0.22)');
-      gradient.addColorStop(0.5, 'rgba(240, 240, 240, 0.12)');
-      gradient.addColorStop(1, 'rgba(140, 140, 140, 0.22)');
+      gradient.addColorStop(0, 'rgba(192, 192, 192, 0.30)');
+      gradient.addColorStop(0.5, 'rgba(240, 240, 240, 0.22)');
+      gradient.addColorStop(1, 'rgba(140, 140, 140, 0.30)');
     }
     ctx.fillStyle = gradient;
     ctx.fillRect(rect.x - 10, rect.y - 10, rect.width + 20, rect.height + 20);
   } else if (material.overlayType === 'metallic') {
     ctx.globalCompositeOperation = 'overlay';
-    
-    // Base solid overlay for color depth
-    if (materialId === 'foil-rose-gold') {
-      ctx.fillStyle = 'rgba(183, 110, 121, 0.15)';
+
+    if (materialId === 'foil-gold') {
+      ctx.fillStyle = 'rgba(201, 168, 76, 0.18)';
+      ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    } else if (materialId === 'foil-silver') {
+      ctx.fillStyle = 'rgba(138, 149, 151, 0.18)';
+      ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    } else if (materialId === 'foil-rose-gold') {
+      ctx.fillStyle = 'rgba(183, 110, 121, 0.18)';
       ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
     }
 
     material.stops.forEach((stop) => {
-      // Foil stops have slightly higher opacity for that shiny metallic reflection stop
       let color = stop.color;
       if (materialId === 'foil-gold') {
-        color = stop.offset === 0.25 || stop.offset === 0.75 ? 'rgba(255, 248, 220, 0.15)' : 'rgba(201, 168, 76, 0.4)';
+        color = stop.offset === 0.25 || stop.offset === 0.75 ? 'rgba(255, 248, 220, 0.18)' : 'rgba(201, 168, 76, 0.45)';
       } else if (materialId === 'foil-silver') {
-        color = stop.offset === 0.25 || stop.offset === 0.75 ? 'rgba(255, 255, 255, 0.15)' : 'rgba(138, 149, 151, 0.4)';
+        color = stop.offset === 0.25 || stop.offset === 0.75 ? 'rgba(255, 255, 255, 0.18)' : 'rgba(138, 149, 151, 0.45)';
       } else if (materialId === 'foil-rose-gold') {
-        color = stop.offset === 0.25 || stop.offset === 0.75 ? 'rgba(255, 209, 220, 0.15)' : 'rgba(183, 110, 121, 0.4)';
+        color = stop.offset === 0.25 || stop.offset === 0.75 ? 'rgba(255, 209, 220, 0.18)' : 'rgba(183, 110, 121, 0.45)';
       }
       gradient.addColorStop(stop.offset, color);
     });
 
     ctx.fillStyle = gradient;
+    ctx.fillRect(rect.x - 10, rect.y - 10, rect.width + 20, rect.height + 20);
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
     ctx.fillRect(rect.x - 10, rect.y - 10, rect.width + 20, rect.height + 20);
   }
 
