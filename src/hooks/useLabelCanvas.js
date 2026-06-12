@@ -85,7 +85,7 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
     const defineShapePath = (context) => {
       context.beginPath();
       if (shape.pathType === 'circle') {
-        context.arc(50, 50, 46, 0, Math.PI * 2);
+        context.arc(0, 0, 46, 0, Math.PI * 2);
       } else if (shape.pathType === 'roundRect') {
         const [rx, ry, rw, rh, rr] = shape.rectParams;
         context.roundRect(rx, ry, rw, rh, rr);
@@ -98,7 +98,7 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
     };
 
     const applyShapeTransform = (context) => {
-      context.translate(rect.x, rect.y);
+      context.translate(300, 300);
       context.scale(shapeScale, shapeScale);
     };
 
@@ -357,7 +357,7 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
       
       if (shape.pathType === 'circle') {
         ctx.beginPath();
-        ctx.arc(50, 50, 46, 0, Math.PI * 2);
+        ctx.arc(0, 0, 46, 0, Math.PI * 2);
         ctx.fill();
       } else if (shape.pathType === 'roundRect') {
         ctx.beginPath();
@@ -378,7 +378,7 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
       ctx.setLineDash([4, 4]);
       if (shape.pathType === 'circle') {
         ctx.beginPath();
-        ctx.arc(50, 50, 46, 0, Math.PI * 2);
+        ctx.arc(0, 0, 46, 0, Math.PI * 2);
         ctx.stroke();
       } else if (shape.pathType === 'roundRect') {
         ctx.beginPath();
