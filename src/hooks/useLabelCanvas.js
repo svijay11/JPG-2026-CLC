@@ -6,6 +6,7 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
   selectedShape,
   selectedMaterial,
   uploadedImage,
+  sampleImage,
   imageOffset,
   labelText,
   selectedFont,
@@ -104,9 +105,10 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
 
     // Calculate Image Placement (cover fit)
     let imgDraw = null;
-    if (uploadedImage) {
-      const imgW = uploadedImage.width;
-      const imgH = uploadedImage.height;
+    const activeImg = uploadedImage || sampleImage;
+    if (activeImg) {
+      const imgW = activeImg.width;
+      const imgH = activeImg.height;
       const imgRatio = imgW / imgH;
       const rectRatio = rect.width / rect.height;
 
@@ -124,12 +126,36 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
       const centerX = rect.x + (rect.width - drawW) / 2;
       const centerY = rect.y + (rect.height - drawH) / 2;
 
-      // Apply drag offset
+      // All shapes use the same rose sample image with circle-identical positioning
+      const SAMPLE_IMAGE_ADJUSTMENTS = {
+        'circle':                               { scale: 1.1, offsetX: -35, offsetY: 0 },
+        'tall-label':                           { scale: 1.1, offsetX: -35, offsetY: 0 },
+        'squircle':                             { scale: 1.1, offsetX: -35, offsetY: 0 },
+        'template_page_8_perfect_baroque_oval': { scale: 1.1, offsetX: -35, offsetY: 0 },
+        'template_page_14_stepped_badge':       { scale: 1.1, offsetX: -35, offsetY: 0 },
+        'template_page_12_tapered_shield':      { scale: 1.1, offsetX: -35, offsetY: 0 },
+        'template_page_10_crest_wave':          { scale: 1.1, offsetX: -35, offsetY: 0 }
+      };
+
+      let finalW = drawW;
+      let finalH = drawH;
+      let finalX = centerX;
+      let finalY = centerY;
+
+      if (!uploadedImage) {
+        const adj = SAMPLE_IMAGE_ADJUSTMENTS[selectedShape] || { scale: 1.0, offsetX: 0, offsetY: 0 };
+        finalW = drawW * adj.scale;
+        finalH = drawH * adj.scale;
+        finalX = rect.x + (rect.width - finalW) / 2 + adj.offsetX;
+        finalY = rect.y + (rect.height - finalH) / 2 + adj.offsetY;
+      }
+
+      // Apply drag offset (only apply to user's uploaded image, not to the sample)
       imgDraw = {
-        x: centerX + imageOffset.x,
-        y: centerY + imageOffset.y,
-        w: drawW,
-        h: drawH
+        x: finalX + (uploadedImage ? imageOffset.x : 0),
+        y: finalY + (uploadedImage ? imageOffset.y : 0),
+        w: finalW,
+        h: finalH
       };
     }
 
@@ -145,12 +171,12 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
     ctx.fillRect(rect.x - 10, rect.y - 10, rect.width + 20, rect.height + 20);
     ctx.restore();
 
-    // Layer 2: Uploaded Image (Unclipped in reposition mode, clipped in normal mode)
-    if (uploadedImage && imgDraw) {
-      if (isRepositioning) {
+    // Layer 2: Uploaded/Sample Image (Unclipped in reposition mode, clipped in normal mode)
+    if (activeImg && imgDraw) {
+      if (isRepositioning && uploadedImage) {
         // Draw unclipped full image so it can be seen completely
         ctx.save();
-        ctx.drawImage(uploadedImage, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h);
+        ctx.drawImage(activeImg, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h);
         ctx.restore();
       } else {
         // Draw clipped image
@@ -159,7 +185,7 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
         const imgPath = defineShapePath(ctx);
         if (imgPath) ctx.clip(imgPath); else ctx.clip();
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.drawImage(uploadedImage, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h);
+        ctx.drawImage(activeImg, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h);
         ctx.restore();
       }
     } else {
@@ -405,6 +431,7 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
     selectedShape,
     selectedMaterial,
     uploadedImage,
+    sampleImage,
     imageOffset,
     labelText,
     selectedFont,

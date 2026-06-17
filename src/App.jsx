@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import PreviewPanel from './components/PreviewPanel';
 import ControlPanel from './components/ControlPanel';
 import Toast from './components/Toast';
@@ -38,11 +38,42 @@ export default function App() {
   // Text color change handler
   const handleTextColorChange = (color) => setTextColor(color);
 
+  // --- SAMPLE IMAGES PRELOADING ---
+  const [sampleImages, setSampleImages] = useState({});
+  useEffect(() => {
+    const urls = {
+      sample_1: '/sample_1.jpg',
+      sample_2: '/sample_2.jpg',
+      sample_3: '/sample_3.jpg'
+    };
+    const loaded = {};
+    let count = 0;
+    const keys = Object.keys(urls);
+    keys.forEach((key) => {
+      const img = new Image();
+      img.src = urls[key];
+      img.onload = () => {
+        loaded[key] = img;
+        count++;
+        if (count === keys.length) {
+          setSampleImages(loaded);
+        }
+      };
+    });
+  }, []);
+
+  // All shapes use the same rose sample image so every template shows real content
+  const getSampleImageKeyForShape = (_shapeId) => 'sample_1';
+
+  const sampleKey = getSampleImageKeyForShape(selectedShape);
+  const sampleImage = sampleImages[sampleKey] || null;
+
   // --- CANVAS INTEGRATION ---
   useLabelCanvas(canvasRef, {
     selectedShape,
     selectedMaterial,
     uploadedImage,
+    sampleImage,
     imageOffset,
     labelText,
     selectedFont,
