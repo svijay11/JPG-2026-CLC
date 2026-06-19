@@ -14,23 +14,28 @@ export default function ControlPanel({
   imageUrl,
   onImageUploaded,
   onImageRemoved,
-  labelText,
-  onTextChange,
-  selectedFont,
-  onFontChange,
+  textSegments,
+  onTextSegmentsChange,
+  activeTextId,
+  onSetActiveTextId,
+  repositionMode,
+  onRepositionModeChange,
   imageOffset,
   onImageOffsetChange,
-  isRepositioning,
-  onToggleReposition,
   hasTextOverflow,
   quantity,
   onQuantityChange,
   onAddToCart,
   uvEnabled,
-  onUvToggle,
-  textColor,
-  onTextColorChange
+  onUvToggle
 }) {
+  const toggleImageReposition = () => {
+    if (repositionMode === 'image') {
+      onRepositionModeChange('none');
+    } else {
+      onRepositionModeChange('image');
+    }
+  };
   // Calculate total pricing based on selected material and quantity
   const { unitPrice, total } = calculateTotal(selectedMaterial, quantity, uvEnabled);
 
@@ -56,7 +61,7 @@ export default function ControlPanel({
         <ShapeSelector
           selectedShape={selectedShape}
           onSelectShape={onSelectShape}
-          disabled={isRepositioning}
+          disabled={repositionMode !== 'none'}
         />
 
         <hr className="border-gray-100" />
@@ -65,13 +70,13 @@ export default function ControlPanel({
         <MaterialSelector
           selectedMaterial={selectedMaterial}
           onSelectMaterial={onSelectMaterial}
-          disabled={isRepositioning}
+          disabled={repositionMode !== 'none'}
         />
 
         <hr className="border-gray-100" />
 
         {/* Section 3: Size Display */}
-        <div className={`space-y-3 transition-opacity duration-300 ${isRepositioning ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+        <div className={`space-y-3 transition-opacity duration-300 ${repositionMode !== 'none' ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
           <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 font-sansUI">
             3. Label Size
           </h3>
@@ -98,29 +103,29 @@ export default function ControlPanel({
           imageUrl={imageUrl}
           onImageUploaded={onImageUploaded}
           onImageRemoved={onImageRemoved}
-          isRepositioning={isRepositioning}
-          onToggleReposition={onToggleReposition}
-          disabled={isRepositioning} // zone click is disabled, only done button is clickable
+          isRepositioning={repositionMode === 'image'}
+          onToggleReposition={toggleImageReposition}
+          disabled={repositionMode === 'text'} // Disable upload interactions if text edit is active
         />
 
         <hr className="border-gray-100" />
 
-          {/* Section 5: Typography, Text & Text Color */}
+        {/* Section 5: Typography, Text & Text Color */}
         <TextControls
-          labelText={labelText}
-          onTextChange={onTextChange}
-          selectedFont={selectedFont}
-          onFontChange={onFontChange}
+          textSegments={textSegments}
+          onTextSegmentsChange={onTextSegmentsChange}
+          activeTextId={activeTextId}
+          onSetActiveTextId={onSetActiveTextId}
+          repositionMode={repositionMode}
+          onRepositionModeChange={onRepositionModeChange}
           hasTextOverflow={hasTextOverflow}
-          disabled={isRepositioning}
-          textColor={textColor}
-          onTextColorChange={onTextColorChange}
+          disabled={repositionMode === 'image'}
         />
 
         <hr className="border-gray-100" />
 
         {/* Section 6: UV Coating */}
-        <div className={`space-y-3 transition-opacity duration-300 ${isRepositioning ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+        <div className={`space-y-3 transition-opacity duration-300 ${repositionMode !== 'none' ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
           <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 font-sansUI">
             6. UV Coating
           </h3>
@@ -129,7 +134,7 @@ export default function ControlPanel({
               type="checkbox"
               checked={uvEnabled}
               onChange={onUvToggle}
-              disabled={isRepositioning}
+              disabled={repositionMode !== 'none'}
               className="w-4 h-4 accent-luxury-gold"
             />
             <div>
@@ -145,7 +150,7 @@ export default function ControlPanel({
         <hr className="border-gray-100" />
 
         {/* Section 7: Quantity Selector */}
-        <div className={`space-y-3 transition-opacity duration-300 ${isRepositioning ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+        <div className={`space-y-3 transition-opacity duration-300 ${repositionMode !== 'none' ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
           <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 font-sansUI">
             7. Quantity
           </h3>
@@ -153,7 +158,8 @@ export default function ControlPanel({
             <button
               type="button"
               onClick={() => onQuantityChange(Math.max(STATIC_QUANTITY, quantity - 1))}
-              className="w-10 h-10 border border-gray-200 hover:border-luxury-gold hover:text-luxury-gold rounded-lg flex items-center justify-center font-bold text-lg transition-colors bg-white shadow-sm"
+              disabled={repositionMode !== 'none'}
+              className="w-10 h-10 border border-gray-200 hover:border-luxury-gold hover:text-luxury-gold rounded-lg flex items-center justify-center font-bold text-lg transition-colors bg-white shadow-sm disabled:opacity-50"
               aria-label="Decrease quantity"
             >
               -
@@ -163,13 +169,15 @@ export default function ControlPanel({
               min={STATIC_QUANTITY}
               value={quantity}
               onChange={(e) => onQuantityChange(Math.max(STATIC_QUANTITY, parseInt(e.target.value) || STATIC_QUANTITY))}
-              className="w-20 h-10 border border-gray-200 rounded-lg text-center font-bold text-luxury-charcoal focus:border-luxury-gold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none shadow-inner"
+              disabled={repositionMode !== 'none'}
+              className="w-20 h-10 border border-gray-200 rounded-lg text-center font-bold text-luxury-charcoal focus:border-luxury-gold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none shadow-inner disabled:opacity-50"
               aria-label="Quantity amount"
             />
             <button
               type="button"
               onClick={() => onQuantityChange(quantity + 1)}
-              className="w-10 h-10 border border-gray-200 hover:border-luxury-gold hover:text-luxury-gold rounded-lg flex items-center justify-center font-bold text-lg transition-colors bg-white shadow-sm"
+              disabled={repositionMode !== 'none'}
+              className="w-10 h-10 border border-gray-200 hover:border-luxury-gold hover:text-luxury-gold rounded-lg flex items-center justify-center font-bold text-lg transition-colors bg-white shadow-sm disabled:opacity-50"
               aria-label="Increase quantity"
             >
               +

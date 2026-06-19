@@ -2,15 +2,15 @@ import { useEffect, useState } from 'react';
 import { SHAPES } from '../config/shapes';
 import { MATERIALS } from '../config/pricing';
 
-export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
+export const useLabelCanvas = (canvasRef, {
   selectedShape,
   selectedMaterial,
   uploadedImage,
   sampleImage,
   imageOffset,
-  labelText,
-  selectedFont,
-  isRepositioning,
+  textSegments,
+  repositionMode,
+  uvEnabled,
   setHasTextOverflow
 }) => {
   const [fontsLoaded, setFontsLoaded] = useState(0);
@@ -82,20 +82,18 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
       ctx.stroke();
     }
 
-    // Helper: Define Shape Path on Canvas Context
-    const defineShapePath = (context) => {
-      context.beginPath();
+    // Helper: Return a Path2D describing the shape in shape-local coordinates (centered at 0,0)
+    const defineShapePath = () => {
+      const p = new Path2D();
       if (shape.pathType === 'circle') {
-        context.arc(0, 0, 46, 0, Math.PI * 2);
+        p.arc(0, 0, 46, 0, Math.PI * 2);
       } else if (shape.pathType === 'roundRect') {
-        const [rx, ry, rw, rh, rr] = shape.rectParams;
-        context.roundRect(rx, ry, rw, rh, rr);
+        const [rx, ry, rw, rh/*, rr*/] = shape.rectParams;
+        p.rect(rx, ry, rw, rh);
       } else if (shape.pathType === 'path2d') {
-        const p = new Path2D(shape.path);
-        // Note: clip with Path2D is handled directly by clip(p)
-        return p;
+        return new Path2D(shape.path);
       }
-      return null;
+      return p;
     };
 
     const applyShapeTransform = (context) => {
@@ -173,7 +171,7 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
 
     // Layer 2: Uploaded/Sample Image (Unclipped in reposition mode, clipped in normal mode)
     if (activeImg && imgDraw) {
-      if (isRepositioning && uploadedImage) {
+      if (repositionMode === 'image' && uploadedImage) {
         // Draw unclipped full image so it can be seen completely
         ctx.save();
         ctx.drawImage(activeImg, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h);
@@ -212,7 +210,7 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
     // Layer 3: Material Overlay (Always Clipped to Shape)
     ctx.save();
     applyShapeTransform(ctx);
-    const matPath = defineShapePath(ctx);
+    const matPath = defineShapePath();
     if (matPath) ctx.clip(matPath); else ctx.clip();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     applyMaterialOverlay(ctx, rect, selectedMaterial);
@@ -222,7 +220,7 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
     applyShapeTransform(ctx);
     ctx.strokeStyle = selectedMaterial.startsWith('foil') ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
     ctx.lineWidth = 2 / shapeScale;
-    const materialOutline = defineShapePath(ctx);
+    const materialOutline = defineShapePath();
     if (materialOutline) ctx.stroke(materialOutline);
     ctx.restore();
 
@@ -242,73 +240,81 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
     // Layer 4: Shape Outline (Unclipped, drawn in normal scale)
     ctx.save();
     applyShapeTransform(ctx);
-    
     ctx.strokeStyle = '#2d2d2d';
     ctx.lineWidth = 1.5 / shapeScale;
-    
-    const outlinePath = defineShapePath(ctx);
-    if (outlinePath) {
-      ctx.stroke(outlinePath);
-    } else {
-      ctx.stroke();
-    }
+    const outlinePath = defineShapePath();
+    if (outlinePath) ctx.stroke(outlinePath);
     ctx.restore();
 
-    // Layer 5: Text Layer (Unclipped, White text with subtle black shadow)
+    // Layer 5: Text Layer (Unclipped, Customizable segments with subtle black shadow)
     let overflowDetected = false;
-    if (labelText) {
+    const activeSegments = textSegments.filter(s => s && s.text && s.text.trim().length > 0);
+    
+    if (activeSegments.length > 0) {
       ctx.save();
-      const textCenterY = rect.y + rect.height * 0.75; // Centered in lower third
-      const maxWidth = rect.width * 0.80; // Margin boundary
-      
-      // Auto-fit loop: start at 28px and reduce to 12px
-      let fontSize = 28;
-      const lines = labelText.split('\n');
-      
-      let maxLineWidth = 0;
-      do {
-        ctx.font = `bold ${fontSize}px "${selectedFont}", serif`;
-        maxLineWidth = 0;
-        for (const line of lines) {
-          const metrics = ctx.measureText(line);
-          if (metrics.width > maxLineWidth) {
-            maxLineWidth = metrics.width;
-          }
-        }
-        if (maxLineWidth <= maxWidth) {
-          break;
-        }
-        fontSize--;
-      } while (fontSize > 12);
-
-      // Text styling
-      ctx.fillStyle = textColor || '#ffffff';
-      ctx.font = `bold ${fontSize}px "${selectedFont}", serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
       // Drop shadow for legibility over white/images
       ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
       ctx.shadowBlur = 4;
       ctx.shadowOffsetX = 1;
       ctx.shadowOffsetY = 1;
 
-      // Draw lines with 1.3x line height
-      const lineHeight = fontSize * 1.3;
-      const startY = textCenterY - ((lines.length - 1) * lineHeight) / 2;
+      // Centered in lower third by default
+      const baseTextCenterY = rect.y + rect.height * 0.75;
+      // Calculate total height of the text block (ignores per-line vertical offsets)
+      const totalTextHeight = activeSegments.reduce((acc, seg) => acc + (seg.fontSize * 1.3), 0);
+      let currentY = baseTextCenterY - totalTextHeight / 2;
 
-      lines.forEach((line, i) => {
-        const lineY = startY + i * lineHeight;
-        ctx.fillText(line, 300, lineY);
+      // Keep track of the outer boundaries of all text segments for dashed outline and overflow detection
+      let minX = Infinity;
+      let maxX = -Infinity;
+      const minY = currentY;
+      const maxY = currentY + totalTextHeight;
+
+      activeSegments.forEach((segment) => {
+        const fontName = segment.font || 'Playfair Display';
+        ctx.font = `bold ${segment.fontSize}px "${fontName}", serif`;
+        ctx.fillStyle = segment.color || '#000000';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        const segOffset = segment.offset || { x: 0, y: 0 };
+        const lineY = currentY + segOffset.y;
+        const lineX = 300 + segOffset.x;
+        ctx.fillText(segment.text, lineX, lineY);
+
+        const metrics = ctx.measureText(segment.text);
+        const segmentWidth = metrics.width;
+        const segmentLeft = lineX - segmentWidth / 2;
+        const segmentRight = lineX + segmentWidth / 2;
+
+        if (segmentLeft < minX) minX = segmentLeft;
+        if (segmentRight > maxX) maxX = segmentRight;
+
+        // Check if segment is outside shape bounds or canvas bounds
+        if (
+          segmentLeft < rect.x ||
+          segmentRight > rect.x + rect.width ||
+          (lineY) < rect.y ||
+          (lineY + segment.fontSize * 1.3) > rect.y + rect.height ||
+          segmentLeft < 0 ||
+          segmentRight > logicalSize ||
+          (lineY) < 0 ||
+          (lineY + segment.fontSize * 1.3) > logicalSize
+        ) {
+          overflowDetected = true;
+        }
+
+        currentY += segment.fontSize * 1.3;
       });
 
-      // Check for overflows (out of shape bounds)
-      const totalTextHeight = lines.length * lineHeight;
-      const textTop = textCenterY - totalTextHeight / 2;
-      const textBottom = textCenterY + totalTextHeight / 2;
-      
-      if (textTop < rect.y || textBottom > rect.y + rect.height || maxLineWidth > rect.width) {
-        overflowDetected = true;
+      // Draw dashed outline if text is selected for repositioning
+      if (repositionMode === 'text') {
+        ctx.restore(); // restore shadow settings so box isn't shadowed
+        ctx.save();
+        ctx.strokeStyle = '#c9a84c'; // Gold cut line / border for active editing
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(minX - 8, minY - 8, (maxX - minX) + 16, (maxY - minY) + 16);
       }
 
       ctx.restore();
@@ -325,103 +331,38 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
       ctx.restore();
     }
 
-    // Layer 7: Reposition Mode Shading Overlay
-    if (isRepositioning && uploadedImage && imgDraw) {
+    // Layer 7: Reposition Mode Shading Overlay (draw overlay and punch a hole for the shape)
+    if ((repositionMode === 'image' && uploadedImage && imgDraw) || repositionMode === 'text') {
       ctx.save();
-      // Outer rect (full canvas) + Inner shape (subtracted via evenodd)
-      ctx.beginPath();
-      ctx.rect(0, 0, logicalSize, logicalSize);
-      
-      // Nested shape matrix transform
-      ctx.save();
-      applyShapeTransform(ctx);
-      
-      const repPath = defineShapePath(ctx);
-      // Wait, to add it to context path:
-      if (repPath) {
-        // Path2D lacks automatic addition to current canvas path, but we can stroke/fill it.
-        // To clip evenodd with Path2D, we can clip the context.
-      }
-      ctx.restore();
-      
-      // For evenodd clip, we need shape path drawn inside this path.
-      // So instead of Path2D, we can draw it directly since we translated inside ctx.save()/restore()
-      ctx.save();
-      applyShapeTransform(ctx);
-      if (shape.pathType === 'circle') {
-        ctx.arc(50, 50, 46, 0, Math.PI * 2);
-      } else if (shape.pathType === 'roundRect') {
-        const [rx, ry, rw, rh, rr] = shape.rectParams;
-        ctx.roundRect(rx, ry, rw, rh, rr);
-      } else if (shape.pathType === 'path2d') {
-        // Path2D can be added to the path using ctx.fill(p) or similar.
-        // Wait, to add Path2D to the active path:
-        // Modern canvas has a Path2D constructor but we cannot append it directly to another path easily
-        // unless we use evenodd clip on path2d directly.
-        // But wait! We can just draw the path manually OR since we are inside translate/scale,
-        // we can use the canvas clip. Let's think:
-        // If we want to shade the area outside, we can just fill the outer area!
-        // An easier way to dim the outside area is:
-        // 1. Draw a semi-transparent black screen over the whole canvas.
-        // 2. Draw the shape path.
-        // 3. Set globalCompositeOperation to 'destination-out' to CLEAR the shape path area!
-        // 4. Set globalCompositeOperation back to 'source-over'.
-        // This is a 100% robust way that works for ALL shapes and Path2D, without needing evenodd clip on composite paths!
-      }
-      ctx.restore();
 
-      // Let's implement the destination-out clearance. It is extremely elegant!
-      // Draw dark semi-transparent screen
+      // Draw dark overlay across whole canvas
       ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
       ctx.fillRect(0, 0, logicalSize, logicalSize);
 
-      // Now clear the shape area
+      // Punch out the shape area so interior remains visible using destination-out
       ctx.save();
       ctx.globalCompositeOperation = 'destination-out';
-      ctx.fillStyle = '#ffffff'; // Color doesn't matter for destination-out
       applyShapeTransform(ctx);
-      
-      if (shape.pathType === 'circle') {
-        ctx.beginPath();
-        ctx.arc(0, 0, 46, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (shape.pathType === 'roundRect') {
-        ctx.beginPath();
-        const [rx, ry, rw, rh, rr] = shape.rectParams;
-        ctx.roundRect(rx, ry, rw, rh, rr);
-        ctx.fill();
-      } else if (shape.pathType === 'path2d') {
-        const p = new Path2D(shape.path);
-        ctx.fill(p);
-      }
+      const hole = defineShapePath();
+      if (hole) ctx.fill(hole);
       ctx.restore();
 
-      // Now draw a bright dashed highlight around the cut line to emphasize it
+      // Stroke the shape with dashed gold to emphasize
       ctx.save();
       applyShapeTransform(ctx);
-      ctx.strokeStyle = '#c9a84c'; // Gold cut line in reposition mode
+      ctx.strokeStyle = '#c9a84c';
       ctx.lineWidth = 2 / shapeScale;
       ctx.setLineDash([4, 4]);
-      if (shape.pathType === 'circle') {
-        ctx.beginPath();
-        ctx.arc(0, 0, 46, 0, Math.PI * 2);
-        ctx.stroke();
-      } else if (shape.pathType === 'roundRect') {
-        ctx.beginPath();
-        const [rx, ry, rw, rh, rr] = shape.rectParams;
-        ctx.roundRect(rx, ry, rw, rh, rr);
-        ctx.stroke();
-      } else if (shape.pathType === 'path2d') {
-        const p = new Path2D(shape.path);
-        ctx.stroke(p);
-      }
+      const strokePath = defineShapePath();
+      if (strokePath) ctx.stroke(strokePath);
       ctx.restore();
 
-      // Draw "Repositioning Mode" text overlay
+      // Draw reposition message
       ctx.fillStyle = '#c9a84c';
       ctx.font = '14px "Josefin Sans", sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('DRAG ON CANVAS TO PAN IMAGE', 300, 40);
+      const textMsg = repositionMode === 'image' ? 'DRAG ON CANVAS TO PAN IMAGE' : 'DRAG ON CANVAS TO PAN TEXT';
+      ctx.fillText(textMsg, 300, 40);
 
       ctx.restore();
     }
@@ -433,11 +374,9 @@ export const useLabelCanvas = (canvasRef, { uvEnabled, textColor,
     uploadedImage,
     sampleImage,
     imageOffset,
-    labelText,
-    selectedFont,
-    isRepositioning,
+    textSegments,
+    repositionMode,
     uvEnabled,
-    textColor,
     fontsLoaded,
     setHasTextOverflow
   ]);

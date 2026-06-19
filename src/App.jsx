@@ -19,11 +19,14 @@ export default function App() {
   const [imageUrl, setImageUrl] = useState(null);
   
   const [imageOffset, setImageOffset] = useState({ x: 0, y: 0 });
-  const [labelText, setLabelText] = useState('');
-  const [selectedFont, setSelectedFont] = useState('Playfair Display');
-  const [isRepositioning, setIsRepositioning] = useState(false);
+  const [textSegments, setTextSegments] = useState([
+    { id: '1', text: 'John & Jane', fontSize: 26, color: '#000000', font: 'Playfair Display', offset: { x: 0, y: 0 } },
+    { id: '2', text: 'June 15, 2026', fontSize: 16, color: '#7a7a7a', font: 'Josefin Sans', offset: { x: 0, y: 0 } },
+    { id: '3', text: 'Napa Valley, CA', fontSize: 12, color: '#a3a3a3', font: 'Raleway', offset: { x: 0, y: 0 } }
+  ]);
+  const [repositionMode, setRepositionMode] = useState('none'); // 'none', 'image', 'text'
+  const [activeTextId, setActiveTextId] = useState(null);
   const [uvEnabled, setUvEnabled] = useState(false);
-  const [textColor, setTextColor] = useState('#000000');
   const [hasTextOverflow, setHasTextOverflow] = useState(false);
   const [quantity, setQuantity] = useState(10);
   const [toastMessage, setToastMessage] = useState(null);
@@ -34,9 +37,6 @@ export default function App() {
 
   // UV toggle handler
   const handleUvToggle = () => setUvEnabled((prev) => !prev);
-
-  // Text color change handler
-  const handleTextColorChange = (color) => setTextColor(color);
 
   // --- SAMPLE IMAGES PRELOADING ---
   const [sampleImages, setSampleImages] = useState({});
@@ -75,13 +75,18 @@ export default function App() {
     uploadedImage,
     sampleImage,
     imageOffset,
-    labelText,
-    selectedFont,
-    isRepositioning,
+    textSegments,
+    repositionMode,
     uvEnabled,
-    textColor,
     setHasTextOverflow
   });
+
+  // Clear activeTextId when reposition mode is turned off or switched away from text
+  useEffect(() => {
+    if (repositionMode !== 'text' && activeTextId) {
+      setActiveTextId(null);
+    }
+  }, [repositionMode]);
 
   // --- EVENT HANDLERS ---
   const handleImageUploaded = (imgElement, objectUrl) => {
@@ -101,7 +106,13 @@ export default function App() {
     setUploadedImage(null);
     setImageUrl(null);
     setImageOffset({ x: 0, y: 0 });
-    setIsRepositioning(false); // Cancel reposition mode if active
+    if (repositionMode === 'image') {
+      setRepositionMode('none'); // Cancel reposition mode if active
+    }
+  };
+
+  const handleSetTextSegmentOffset = (id, newOffset) => {
+    setTextSegments((prev) => prev.map(s => s.id === id ? { ...s, offset: { x: newOffset.x, y: newOffset.y } } : s));
   };
 
   const handleAddToCart = () => {
@@ -124,10 +135,8 @@ export default function App() {
     const newItem = {
       shape: selectedShape,
       material: selectedMaterial,
-      labelText,
-      selectedFont,
+      textSegments,
       uvEnabled,
-      textColor,
       quantity,
       unitPrice,
       totalPrice: total,
@@ -137,12 +146,16 @@ export default function App() {
     setCart((prev) => [...prev, newItem]);
 
     // 5. Reset customizing designer states back to standard defaults for the next order
-    setLabelText('');
+    setTextSegments([
+      { id: '1', text: 'John & Jane', fontSize: 26, color: '#000000', font: 'Playfair Display', offset: { x: 0, y: 0 } },
+      { id: '2', text: 'June 15, 2026', fontSize: 16, color: '#7a7a7a', font: 'Josefin Sans', offset: { x: 0, y: 0 } },
+      { id: '3', text: 'Napa Valley, CA', fontSize: 12, color: '#a3a3a3', font: 'Raleway', offset: { x: 0, y: 0 } }
+    ]);
+    setActiveTextId(null);
     setUploadedImage(null);
     setImageUrl(null);
     setImageOffset({ x: 0, y: 0 });
     setUvEnabled(false);
-    setTextColor('#000000');
     setQuantity(10);
 
     setToastMessage('Added design to cart successfully!');
@@ -178,9 +191,12 @@ export default function App() {
       {/* Live Preview Panel (Left 60% on desktop) */}
       <PreviewPanel
         canvasRef={canvasRef}
-        isRepositioning={isRepositioning}
+        repositionMode={repositionMode}
         imageOffset={imageOffset}
         onImageOffsetChange={setImageOffset}
+        textSegments={textSegments}
+        activeTextId={activeTextId}
+        onTextSegmentOffsetChange={handleSetTextSegmentOffset}
       />
 
       {/* Customization Control Panel (Right 40% on desktop) */}
@@ -193,22 +209,20 @@ export default function App() {
         imageUrl={imageUrl}
         onImageUploaded={handleImageUploaded}
         onImageRemoved={handleImageRemoved}
-        labelText={labelText}
-        onTextChange={setLabelText}
-        selectedFont={selectedFont}
-        onFontChange={setSelectedFont}
+        textSegments={textSegments}
+        onTextSegmentsChange={setTextSegments}
+        activeTextId={activeTextId}
+        onSetActiveTextId={setActiveTextId}
+        repositionMode={repositionMode}
+        onRepositionModeChange={setRepositionMode}
         imageOffset={imageOffset}
         onImageOffsetChange={setImageOffset}
-        isRepositioning={isRepositioning}
-        onToggleReposition={() => setIsRepositioning(!isRepositioning)}
         hasTextOverflow={hasTextOverflow}
         quantity={quantity}
         onQuantityChange={setQuantity}
         onAddToCart={handleAddToCart}
         uvEnabled={uvEnabled}
         onUvToggle={handleUvToggle}
-        textColor={textColor}
-        onTextColorChange={handleTextColorChange}
       />
 
       {/* Slide-over Cart & Checkout Portal */}

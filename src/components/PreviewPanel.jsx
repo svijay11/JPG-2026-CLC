@@ -2,12 +2,17 @@ import React, { useRef, useState } from 'react';
 
 export default function PreviewPanel({ 
   canvasRef, 
-  isRepositioning, 
+  repositionMode, 
   imageOffset, 
-  onImageOffsetChange 
+  onImageOffsetChange,
+  textSegments = [],
+  activeTextId = null,
+  onTextSegmentOffsetChange
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
+
+  const activeReposition = repositionMode !== 'none';
 
   // Get coords from Mouse or Touch event
   const getCoordinates = (e) => {
@@ -18,7 +23,7 @@ export default function PreviewPanel({
   };
 
   const handleStart = (e) => {
-    if (!isRepositioning) return;
+    if (!activeReposition) return;
     setIsDragging(true);
     const coords = getCoordinates(e.nativeEvent);
     dragStart.current = coords;
@@ -30,15 +35,21 @@ export default function PreviewPanel({
   };
 
   const handleMove = (e) => {
-    if (!isRepositioning || !isDragging) return;
+    if (!activeReposition || !isDragging) return;
     const coords = getCoordinates(e.nativeEvent);
     const dx = coords.x - dragStart.current.x;
     const dy = coords.y - dragStart.current.y;
 
-    onImageOffsetChange({
-      x: imageOffset.x + dx,
-      y: imageOffset.y + dy
-    });
+    if (repositionMode === 'image' && onImageOffsetChange) {
+      onImageOffsetChange({
+        x: imageOffset.x + dx,
+        y: imageOffset.y + dy
+      });
+    } else if (repositionMode === 'text' && onTextSegmentOffsetChange && activeTextId) {
+      const seg = textSegments.find(s => s.id === activeTextId);
+      const base = seg && seg.offset ? seg.offset : { x: 0, y: 0 };
+      onTextSegmentOffsetChange(activeTextId, { x: base.x + dx, y: base.y + dy });
+    }
 
     dragStart.current = coords;
     
@@ -66,7 +77,7 @@ export default function PreviewPanel({
           onTouchMove={handleMove}
           onTouchEnd={handleEnd}
           className={`max-w-full aspect-square w-[320px] sm:w-[450px] md:w-[500px] lg:w-[550px] xl:w-[600px] block transition-transform duration-300
-            ${isRepositioning ? 'cursor-move ring-2 ring-luxury-gold/50 shadow-luxury-gold/10' : 'cursor-default'}
+            ${activeReposition ? 'cursor-move ring-2 ring-luxury-gold/50 shadow-luxury-gold/10' : 'cursor-default'}
           `}
           aria-label="Custom label designer preview mockup"
         />
