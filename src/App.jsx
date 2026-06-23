@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import PreviewPanel from './components/PreviewPanel';
 import ControlPanel from './components/ControlPanel';
+import { SHAPES } from './config/shapes';
 import Toast from './components/Toast';
 import CartModal from './components/CartModal';
 import { useLabelCanvas } from './hooks/useLabelCanvas';
@@ -8,6 +9,7 @@ import { calculateTotal } from './config/pricing';
 
 export default function App() {
   const canvasRef = useRef(null);
+  const [showGallery, setShowGallery] = useState(true);
 
   // --- STATE LAYER ---
   const [selectedShape, setSelectedShape] = useState('circle');
@@ -38,35 +40,18 @@ export default function App() {
   // UV toggle handler
   const handleUvToggle = () => setUvEnabled((prev) => !prev);
 
-  // --- SAMPLE IMAGES PRELOADING ---
-  const [sampleImages, setSampleImages] = useState({});
+  // --- SAMPLE IMAGE PRELOADING ---
+  const [sampleImage, setSampleImage] = useState(null);
   useEffect(() => {
-    const urls = {
-      sample_1: '/sample_1.jpg',
-      sample_2: '/sample_2.jpg',
-      sample_3: '/sample_3.jpg'
-    };
-    const loaded = {};
-    let count = 0;
-    const keys = Object.keys(urls);
-    keys.forEach((key) => {
-      const img = new Image();
-      img.src = urls[key];
-      img.onload = () => {
-        loaded[key] = img;
-        count++;
-        if (count === keys.length) {
-          setSampleImages(loaded);
-        }
-      };
-    });
+    const img = new Image();
+    img.src = '/sample_1.jpg';
+    img.onload = () => setSampleImage(img);
   }, []);
 
-  // All shapes use the same rose sample image so every template shows real content
-  const getSampleImageKeyForShape = (_shapeId) => 'sample_1';
-
-  const sampleKey = getSampleImageKeyForShape(selectedShape);
-  const sampleImage = sampleImages[sampleKey] || null;
+  const openEditorForShape = (shapeId) => {
+    setSelectedShape(shapeId);
+    setShowGallery(false);
+  };
 
   // --- CANVAS INTEGRATION ---
   useLabelCanvas(canvasRef, {
@@ -171,6 +156,40 @@ export default function App() {
 
   return (
     <div className="flex flex-col lg:flex-row h-auto lg:h-screen w-screen overflow-y-auto lg:overflow-hidden bg-luxury-charcoal relative">
+
+      {/* Full-screen Gallery */}
+      {showGallery && (
+        <div className="fixed inset-0 z-50 bg-white overflow-auto p-8">
+          <div className="max-w-[1400px] mx-auto">
+            <h1 className="text-4xl font-bold mb-6">Choose a Label Template</h1>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {SHAPES.map((s) => {
+                const Tag = s.svgElement.tag;
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => openEditorForShape(s.id)}
+                    className="flex flex-col items-stretch bg-white border rounded-lg p-4 hover:shadow-lg transition"
+                  >
+                    <div className="w-full h-56 bg-gray-50 rounded flex items-center justify-center mb-3">
+                      <svg viewBox="-50 -50 100 100" className="w-3/4 h-3/4 text-luxury-charcoal">
+                        {/* render svg tag */}
+                        {/**/}
+                        {(() => {
+                          const T = Tag;
+                          return <T {...s.svgElement.props} stroke="currentColor" fill="white" strokeWidth={2} />;
+                        })()}
+                      </svg>
+                    </div>
+                    <div className="text-lg font-semibold text-luxury-charcoal">{s.name}</div>
+                    <div className="text-sm text-gray-500 mt-1">Click to customize</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Floating Cart Icon Top-Right */}
       <button
@@ -203,6 +222,7 @@ export default function App() {
       <ControlPanel
         selectedShape={selectedShape}
         onSelectShape={setSelectedShape}
+        onOpenGallery={() => setShowGallery(true)}
         selectedMaterial={selectedMaterial}
         onSelectMaterial={setSelectedMaterial}
         uploadedImage={uploadedImage}

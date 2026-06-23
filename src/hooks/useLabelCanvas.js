@@ -84,14 +84,27 @@ export const useLabelCanvas = (canvasRef, {
 
     // Helper: Return a Path2D describing the shape in shape-local coordinates (centered at 0,0)
     const defineShapePath = () => {
+      if (shape.pathType === 'path2d') return new Path2D(shape.path);
       const p = new Path2D();
       if (shape.pathType === 'circle') {
         p.arc(0, 0, 46, 0, Math.PI * 2);
-      } else if (shape.pathType === 'roundRect') {
-        const [rx, ry, rw, rh/*, rr*/] = shape.rectParams;
-        p.rect(rx, ry, rw, rh);
-      } else if (shape.pathType === 'path2d') {
-        return new Path2D(shape.path);
+        return p;
+      }
+      if (shape.pathType === 'roundRect') {
+        // build rounded rect path manually using arcTo
+        const [x, y, w, h, rRaw] = shape.rectParams;
+        const r = Math.max(0, Math.min(Math.abs(rRaw || 0), Math.min(w / 2, h / 2)));
+        p.moveTo(x + r, y);
+        p.lineTo(x + w - r, y);
+        p.arcTo(x + w, y, x + w, y + r, r);
+        p.lineTo(x + w, y + h - r);
+        p.arcTo(x + w, y + h, x + w - r, y + h, r);
+        p.lineTo(x + r, y + h);
+        p.arcTo(x, y + h, x, y + h - r, r);
+        p.lineTo(x, y + r);
+        p.arcTo(x, y, x + r, y, r);
+        p.closePath();
+        return p;
       }
       return p;
     };
@@ -258,8 +271,11 @@ export const useLabelCanvas = (canvasRef, {
       ctx.shadowOffsetX = 1;
       ctx.shadowOffsetY = 1;
 
-      // Centered in lower third by default
-      const baseTextCenterY = rect.y + rect.height * 0.75;
+      // Centered in lower third by default; move up for narrow crest shapes
+      let baseTextCenterY = rect.y + rect.height * 0.75;
+      if (shape && shape.id === 'template_page_10_crest_wave') {
+        baseTextCenterY = rect.y + rect.height * 0.5; // center vertically for crest
+      }
       // Calculate total height of the text block (ignores per-line vertical offsets)
       const totalTextHeight = activeSegments.reduce((acc, seg) => acc + (seg.fontSize * 1.3), 0);
       let currentY = baseTextCenterY - totalTextHeight / 2;
@@ -272,7 +288,8 @@ export const useLabelCanvas = (canvasRef, {
 
       activeSegments.forEach((segment) => {
         const fontName = segment.font || 'Playfair Display';
-        ctx.font = `bold ${segment.fontSize}px "${fontName}", serif`;
+        // avoid forcing bold here to match prior sizing
+        ctx.font = `${segment.fontSize}px "${fontName}", serif`;
         ctx.fillStyle = segment.color || '#000000';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
@@ -280,10 +297,24 @@ export const useLabelCanvas = (canvasRef, {
         const segOffset = segment.offset || { x: 0, y: 0 };
         const lineY = currentY + segOffset.y;
         const lineX = 300 + segOffset.x;
-        ctx.fillText(segment.text, lineX, lineY);
 
-        const metrics = ctx.measureText(segment.text);
-        const segmentWidth = metrics.width;
+        // Ensure text fits inside the shape width by reducing font size if necessary
+        const padding = 24; // left + right padding inside shape
+        const availableWidth = rect.width - padding;
+        let currentFontSize = segment.fontSize;
+        ctx.font = `${currentFontSize}px "${fontName}", serif`;
+        let metrics = ctx.measureText(segment.text);
+        let segmentWidth = metrics.width;
+        if (segmentWidth > availableWidth) {
+          const scale = availableWidth / segmentWidth;
+          const newSize = Math.max(8, Math.floor(currentFontSize * scale));
+          currentFontSize = newSize;
+          ctx.font = `${currentFontSize}px "${fontName}", serif`;
+          metrics = ctx.measureText(segment.text);
+          segmentWidth = metrics.width;
+        }
+
+        ctx.fillText(segment.text, lineX, lineY);
         const segmentLeft = lineX - segmentWidth / 2;
         const segmentRight = lineX + segmentWidth / 2;
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import ShapeSelector from './ShapeSelector';
+import { SHAPES } from '../config/shapes';
 import MaterialSelector from './MaterialSelector';
 import ImageUploader from './ImageUploader';
 import TextControls from './TextControls';
@@ -8,6 +8,7 @@ import { calculateTotal, STATIC_QUANTITY } from '../config/pricing';
 export default function ControlPanel({
   selectedShape,
   onSelectShape,
+  onOpenGallery,
   selectedMaterial,
   onSelectMaterial,
   uploadedImage,
@@ -57,95 +58,109 @@ export default function ControlPanel({
 
         <hr className="border-gray-100" />
 
-        {/* Section 1: Template/Shape Selector */}
-        <ShapeSelector
-          selectedShape={selectedShape}
-          onSelectShape={onSelectShape}
-          disabled={repositionMode !== 'none'}
-        />
-
-        <hr className="border-gray-100" />
-
-        {/* Section 2: Material Selector */}
-        <MaterialSelector
-          selectedMaterial={selectedMaterial}
-          onSelectMaterial={onSelectMaterial}
-          disabled={repositionMode !== 'none'}
-        />
-
-        <hr className="border-gray-100" />
-
-        {/* Section 3: Size Display */}
-        <div className={`space-y-3 transition-opacity duration-300 ${repositionMode !== 'none' ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 font-sansUI">
-            3. Label Size
-          </h3>
-          <div className="flex items-center space-x-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-            <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
-            </svg>
-            <div>
-              <div className="text-xs font-bold text-luxury-charcoal">
-                4&quot; × 3&quot; <span className="text-gray-400 font-normal ml-1">(Standard size)</span>
-              </div>
-              <div className="text-[10px] text-gray-400 font-medium leading-tight">
-                Optimized layout ratio fit for standard wine bottles.
-              </div>
+        {/* Section 1: Selected Template */}
+        <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
+          <div className="flex items-center">
+            <div className="w-20 h-14 flex items-center justify-center bg-gray-50 rounded border border-gray-100">
+              {(() => {
+                const s = SHAPES.find((sh) => sh.id === selectedShape) || SHAPES[0];
+                const Tag = s.svgElement.tag;
+                return (
+                  <svg viewBox="-50 -50 100 100" className="w-full h-full text-luxury-charcoal">
+                    <Tag {...s.svgElement.props} stroke="currentColor" fill="white" strokeWidth={2} />
+                  </svg>
+                );
+              })()}
             </div>
+            <div className="ml-4">
+              <div className="font-semibold text-base text-luxury-charcoal">{(SHAPES.find(s => s.id === selectedShape) || SHAPES[0]).name}</div>
+              <div className="text-xs text-gray-500">{selectedShape.replace(/_/g, ' ')}</div>
+            </div>
+          </div>
+          <div>
+            <button onClick={onOpenGallery} className="text-sm px-3 py-2 bg-white border rounded hover:bg-neutral-50">Change template</button>
           </div>
         </div>
 
-        <hr className="border-gray-100" />
-
-        {/* Section 4: Image Upload */}
-        <ImageUploader
-          uploadedImage={uploadedImage}
-          imageUrl={imageUrl}
-          onImageUploaded={onImageUploaded}
-          onImageRemoved={onImageRemoved}
-          isRepositioning={repositionMode === 'image'}
-          onToggleReposition={toggleImageReposition}
-          disabled={repositionMode === 'text'} // Disable upload interactions if text edit is active
-        />
-
-        <hr className="border-gray-100" />
-
-        {/* Section 5: Typography, Text & Text Color */}
-        <TextControls
-          textSegments={textSegments}
-          onTextSegmentsChange={onTextSegmentsChange}
-          activeTextId={activeTextId}
-          onSetActiveTextId={onSetActiveTextId}
-          repositionMode={repositionMode}
-          onRepositionModeChange={onRepositionModeChange}
-          hasTextOverflow={hasTextOverflow}
-          disabled={repositionMode === 'image'}
-        />
-
-        <hr className="border-gray-100" />
-
-        {/* Section 6: UV Coating */}
-        <div className={`space-y-3 transition-opacity duration-300 ${repositionMode !== 'none' ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 font-sansUI">
-            6. UV Coating
-          </h3>
-          <label className="flex items-center space-x-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={uvEnabled}
-              onChange={onUvToggle}
+        {/* Dropdown-style wrapper for customization options */}
+        <details className="bg-white border border-gray-100 rounded-lg">
+          <summary className="px-4 py-3 cursor-pointer text-sm font-semibold text-pink-600 text-center">Select Options</summary>
+          <div className="p-4 space-y-4">
+            {/* Keep existing sections inside the dropdown */}
+            <MaterialSelector
+              selectedMaterial={selectedMaterial}
+              onSelectMaterial={onSelectMaterial}
               disabled={repositionMode !== 'none'}
-              className="w-4 h-4 accent-luxury-gold"
             />
-            <div>
-              <span className="text-sm font-medium text-luxury-charcoal">Add UV Coating</span>
-              <span className="ml-2 text-xs text-gray-400">(+$1.00 / label)</span>
+
+            <ImageUploader
+              uploadedImage={uploadedImage}
+              imageUrl={imageUrl}
+              onImageUploaded={onImageUploaded}
+              onImageRemoved={onImageRemoved}
+              isRepositioning={repositionMode === 'image'}
+              onToggleReposition={() => onRepositionModeChange(repositionMode === 'image' ? 'none' : 'image')}
+              disabled={repositionMode === 'text'}
+            />
+
+            <TextControls
+              textSegments={textSegments}
+              onTextSegmentsChange={onTextSegmentsChange}
+              activeTextId={activeTextId}
+              onSetActiveTextId={onSetActiveTextId}
+              repositionMode={repositionMode}
+              onRepositionModeChange={onRepositionModeChange}
+              hasTextOverflow={hasTextOverflow}
+              disabled={repositionMode === 'image'}
+            />
+
+            <div className={`space-y-3 ${repositionMode !== 'none' ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={uvEnabled}
+                  onChange={onUvToggle}
+                  disabled={repositionMode !== 'none'}
+                  className="w-4 h-4 accent-luxury-gold"
+                />
+                <div>
+                  <span className="text-sm font-medium text-luxury-charcoal">Add UV Coating</span>
+                  <span className="ml-2 text-xs text-gray-400">(+$1.00 / label)</span>
+                </div>
+              </label>
             </div>
-          </label>
-          <p className="text-[10px] text-gray-400 leading-snug">
-            UV coating creates a raised, tactile texture — your label will look and feel premium to the touch.
-          </p>
-        </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center space-x-3">
+                <button
+                  type="button"
+                  onClick={() => onQuantityChange(Math.max(1, quantity - 1))}
+                  disabled={repositionMode !== 'none'}
+                  className="w-10 h-10 border border-gray-200 rounded-lg flex items-center justify-center font-bold bg-white"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  value={quantity}
+                  onChange={(e) => onQuantityChange(Math.max(1, parseInt(e.target.value) || 1))}
+                  disabled={repositionMode !== 'none'}
+                  className="w-20 h-10 border border-gray-200 rounded-lg text-center"
+                />
+                <button
+                  type="button"
+                  onClick={() => onQuantityChange(quantity + 1)}
+                  disabled={repositionMode !== 'none'}
+                  className="w-10 h-10 border border-gray-200 rounded-lg flex items-center justify-center font-bold bg-white"
+                >
+                  +
+                </button>
+                <span className="text-sm text-gray-500">labels</span>
+              </div>
+            </div>
+          </div>
+        </details>
 
         <hr className="border-gray-100" />
 
