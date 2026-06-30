@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import PreviewPanel from './components/PreviewPanel';
 import ControlPanel from './components/ControlPanel';
+import GalleryShapePreview from './components/GalleryShapePreview';
 import { SHAPES } from './config/shapes';
 import Toast from './components/Toast';
 import CartModal from './components/CartModal';
@@ -163,29 +164,19 @@ export default function App() {
           <div className="max-w-[1400px] mx-auto">
             <h1 className="text-4xl font-bold mb-6">Choose a Label Template</h1>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {SHAPES.map((s) => {
-                const Tag = s.svgElement.tag;
-                return (
+              {SHAPES.map((s) => (
                   <button
                     key={s.id}
                     onClick={() => openEditorForShape(s.id)}
                     className="flex flex-col items-stretch bg-white border rounded-lg p-4 hover:shadow-lg transition"
                   >
-                    <div className="w-full h-56 bg-gray-50 rounded flex items-center justify-center mb-3">
-                      <svg viewBox="-50 -50 100 100" className="w-3/4 h-3/4 text-luxury-charcoal">
-                        {/* render svg tag */}
-                        {/**/}
-                        {(() => {
-                          const T = Tag;
-                          return <T {...s.svgElement.props} stroke="currentColor" fill="white" strokeWidth={2} />;
-                        })()}
-                      </svg>
+                    <div className="w-full h-56 bg-gray-50 rounded flex items-center justify-center mb-3 overflow-hidden p-2">
+                      <GalleryShapePreview shape={s} />
                     </div>
                     <div className="text-lg font-semibold text-luxury-charcoal">{s.name}</div>
                     <div className="text-sm text-gray-500 mt-1">Click to customize</div>
                   </button>
-                );
-              })}
+              ))}
             </div>
           </div>
         </div>
