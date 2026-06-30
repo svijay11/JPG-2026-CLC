@@ -114,9 +114,12 @@ export const useLabelCanvas = (canvasRef, {
       context.scale(shapeScale, shapeScale);
     };
 
-    // Calculate Image Placement (cover fit)
+    // Calculate Image Placement
     let imgDraw = null;
     const activeImg = uploadedImage || sampleImage;
+    const isSample = !uploadedImage && sampleImage;
+    const isSampleLabel = isSample && !shape.clipSampleToShape;
+
     if (activeImg) {
       const imgW = activeImg.width;
       const imgH = activeImg.height;
@@ -124,44 +127,53 @@ export const useLabelCanvas = (canvasRef, {
       const rectRatio = rect.width / rect.height;
 
       let drawW, drawH;
-      if (imgRatio > rectRatio) {
-        // Image is wider, match height
-        drawH = rect.height;
-        drawW = imgH * imgRatio * (rect.height / imgH);
+
+      if (isSampleLabel) {
+        // Finished label artwork: size from the image itself, not the template shape
+        if (imgRatio >= 1) {
+          drawW = maxTargetSize;
+          drawH = maxTargetSize / imgRatio;
+        } else {
+          drawH = maxTargetSize;
+          drawW = maxTargetSize * imgRatio;
+        }
+      } else if (isSample && shape.clipSampleToShape) {
+        // Photo cropped to shape (e.g. squircle): cover fit, optionally zoomed out
+        if (imgRatio > rectRatio) {
+          drawH = rect.height;
+          drawW = drawH * imgRatio;
+        } else {
+          drawW = rect.width;
+          drawH = drawW / imgRatio;
+        }
       } else {
-        // Image is taller, match width
-        drawW = rect.width;
-        drawH = imgW * (1 / imgRatio) * (rect.width / imgW);
+        // User upload: cover fit inside template shape
+        if (imgRatio > rectRatio) {
+          drawH = rect.height;
+          drawW = drawH * imgRatio;
+        } else {
+          drawW = rect.width;
+          drawH = drawW / imgRatio;
+        }
       }
-
-      const centerX = rect.x + (rect.width - drawW) / 2;
-      const centerY = rect.y + (rect.height - drawH) / 2;
-
-      // All shapes use the same rose sample image with circle-identical positioning
-      const SAMPLE_IMAGE_ADJUSTMENTS = {
-        'circle':                               { scale: 1.1, offsetX: -35, offsetY: 0 },
-        'tall-label':                           { scale: 1.1, offsetX: -35, offsetY: 0 },
-        'squircle':                             { scale: 1.1, offsetX: -35, offsetY: 0 },
-        'template_page_8_perfect_baroque_oval': { scale: 1.1, offsetX: -35, offsetY: 0 },
-        'template_page_14_stepped_badge':       { scale: 1.1, offsetX: -35, offsetY: 0 },
-        'template_page_12_tapered_shield':      { scale: 1.1, offsetX: -35, offsetY: 0 },
-        'template_page_10_crest_wave':          { scale: 1.1, offsetX: -35, offsetY: 0 }
-      };
 
       let finalW = drawW;
       let finalH = drawH;
-      let finalX = centerX;
-      let finalY = centerY;
+      let finalX = isSampleLabel
+        ? 300 - drawW / 2
+        : rect.x + (rect.width - drawW) / 2;
+      let finalY = isSampleLabel
+        ? 300 - drawH / 2
+        : rect.y + (rect.height - drawH) / 2;
 
-      if (!uploadedImage) {
-        const adj = SAMPLE_IMAGE_ADJUSTMENTS[selectedShape] || { scale: 1.0, offsetX: 0, offsetY: 0 };
-        finalW = drawW * adj.scale;
-        finalH = drawH * adj.scale;
-        finalX = rect.x + (rect.width - finalW) / 2 + adj.offsetX;
-        finalY = rect.y + (rect.height - finalH) / 2 + adj.offsetY;
+      if (isSample && shape.clipSampleToShape) {
+        const scale = shape.sampleImageScale ?? 1;
+        finalW = drawW * scale;
+        finalH = drawH * scale;
+        finalX = rect.x + (rect.width - finalW) / 2;
+        finalY = rect.y + (rect.height - finalH) / 2;
       }
 
-      // Apply drag offset (only apply to user's uploaded image, not to the sample)
       imgDraw = {
         x: finalX + (uploadedImage ? imageOffset.x : 0),
         y: finalY + (uploadedImage ? imageOffset.y : 0),
@@ -170,27 +182,31 @@ export const useLabelCanvas = (canvasRef, {
       };
     }
 
+    const overlayRect = isSampleLabel && imgDraw
+      ? { x: imgDraw.x, y: imgDraw.y, width: imgDraw.w, height: imgDraw.h }
+      : rect;
+
     // --- RENDER STACK ---
 
-    // Layer 1: Background Fill (Always Clipped to Shape)
-    ctx.save();
-    applyShapeTransform(ctx);
-    const bgPath = defineShapePath(ctx);
-    if (bgPath) ctx.clip(bgPath); else ctx.clip();
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(rect.x - 10, rect.y - 10, rect.width + 20, rect.height + 20);
-    ctx.restore();
+    // Layer 1: Background Fill (template shape only — not for finished label samples)
+    if (!isSampleLabel) {
+      ctx.save();
+      applyShapeTransform(ctx);
+      const bgPath = defineShapePath(ctx);
+      if (bgPath) ctx.clip(bgPath); else ctx.clip();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(rect.x - 10, rect.y - 10, rect.width + 20, rect.height + 20);
+      ctx.restore();
+    }
 
-    // Layer 2: Uploaded/Sample Image (Unclipped in reposition mode, clipped in normal mode)
+    // Layer 2: Image — label samples draw as-is; uploads/photos clip to template
     if (activeImg && imgDraw) {
-      if (repositionMode === 'image' && uploadedImage) {
-        // Draw unclipped full image so it can be seen completely
+      if (isSampleLabel || (repositionMode === 'image' && uploadedImage)) {
         ctx.save();
         ctx.drawImage(activeImg, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h);
         ctx.restore();
       } else {
-        // Draw clipped image
         ctx.save();
         applyShapeTransform(ctx);
         const imgPath = defineShapePath(ctx);
@@ -199,7 +215,7 @@ export const useLabelCanvas = (canvasRef, {
         ctx.drawImage(activeImg, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h);
         ctx.restore();
       }
-    } else {
+    } else if (!isSampleLabel) {
       // Placeholder Pattern (Always Clipped to Shape)
       ctx.save();
       applyShapeTransform(ctx);
@@ -220,44 +236,57 @@ export const useLabelCanvas = (canvasRef, {
       ctx.restore();
     }
 
-    // Layer 3: Material Overlay (Always Clipped to Shape)
+    // Layer 3: Material Overlay
     ctx.save();
-    applyShapeTransform(ctx);
-    const matPath = defineShapePath();
-    if (matPath) ctx.clip(matPath); else ctx.clip();
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    applyMaterialOverlay(ctx, rect, selectedMaterial);
+    if (isSampleLabel) {
+      applyMaterialOverlay(ctx, overlayRect, selectedMaterial);
+    } else {
+      applyShapeTransform(ctx);
+      const matPath = defineShapePath();
+      if (matPath) ctx.clip(matPath); else ctx.clip();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      applyMaterialOverlay(ctx, overlayRect, selectedMaterial);
+    }
 
-    // Draw a stronger outline after material change so the selected material shape is clearer
-    ctx.save();
-    applyShapeTransform(ctx);
-    ctx.strokeStyle = selectedMaterial.startsWith('foil') ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
-    ctx.lineWidth = 2 / shapeScale;
-    const materialOutline = defineShapePath();
-    if (materialOutline) ctx.stroke(materialOutline);
-    ctx.restore();
+    if (!isSampleLabel) {
+      // Draw a stronger outline after material change so the selected material shape is clearer
+      ctx.save();
+      applyShapeTransform(ctx);
+      ctx.strokeStyle = selectedMaterial.startsWith('foil') ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
+      ctx.lineWidth = 2 / shapeScale;
+      const materialOutline = defineShapePath();
+      if (materialOutline) ctx.stroke(materialOutline);
+      ctx.restore();
+    }
 
   // UV coating overlay (subtle gloss)
   if (uvEnabled) {
     ctx.save();
-    applyShapeTransform(ctx);
-    const uvPath = defineShapePath(ctx);
-    if (uvPath) ctx.clip(uvPath); else ctx.clip();
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = 'rgba(255,255,255,0.12)'; // light UV shine
-    ctx.fillRect(rect.x - 10, rect.y - 10, rect.width + 20, rect.height + 20);
+    if (isSampleLabel) {
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(overlayRect.x, overlayRect.y, overlayRect.width, overlayRect.height);
+    } else {
+      applyShapeTransform(ctx);
+      const uvPath = defineShapePath(ctx);
+      if (uvPath) ctx.clip(uvPath); else ctx.clip();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(rect.x - 10, rect.y - 10, rect.width + 20, rect.height + 20);
+    }
     ctx.restore();
   }
     ctx.restore();
 
-    // Layer 4: Shape Outline (Unclipped, drawn in normal scale)
-    ctx.save();
-    applyShapeTransform(ctx);
-    ctx.strokeStyle = '#2d2d2d';
-    ctx.lineWidth = 1.5 / shapeScale;
-    const outlinePath = defineShapePath();
-    if (outlinePath) ctx.stroke(outlinePath);
-    ctx.restore();
+    // Layer 4: Shape Outline (template only — label samples already include their shape)
+    if (!isSampleLabel) {
+      ctx.save();
+      applyShapeTransform(ctx);
+      ctx.strokeStyle = '#2d2d2d';
+      ctx.lineWidth = 1.5 / shapeScale;
+      const outlinePath = defineShapePath();
+      if (outlinePath) ctx.stroke(outlinePath);
+      ctx.restore();
+    }
 
     // Layer 5: Text Layer (Unclipped, Customizable segments with subtle black shadow)
     let overflowDetected = false;
@@ -272,9 +301,9 @@ export const useLabelCanvas = (canvasRef, {
       ctx.shadowOffsetY = 1;
 
       // Centered in lower third by default; move up for narrow crest shapes
-      let baseTextCenterY = rect.y + rect.height * 0.75;
+      let baseTextCenterY = overlayRect.y + overlayRect.height * 0.75;
       if (shape && shape.id === 'template_page_10_crest_wave') {
-        baseTextCenterY = rect.y + rect.height * 0.5; // center vertically for crest
+        baseTextCenterY = overlayRect.y + overlayRect.height * 0.5;
       }
       // Calculate total height of the text block (ignores per-line vertical offsets)
       const totalTextHeight = activeSegments.reduce((acc, seg) => acc + (seg.fontSize * 1.3), 0);
@@ -298,9 +327,9 @@ export const useLabelCanvas = (canvasRef, {
         const lineY = currentY + segOffset.y;
         const lineX = 300 + segOffset.x;
 
-        // Ensure text fits inside the shape width by reducing font size if necessary
-        const padding = 24; // left + right padding inside shape
-        const availableWidth = rect.width - padding;
+        // Ensure text fits inside the label area by reducing font size if necessary
+        const padding = 24;
+        const availableWidth = overlayRect.width - padding;
         let currentFontSize = segment.fontSize;
         ctx.font = `${currentFontSize}px "${fontName}", serif`;
         let metrics = ctx.measureText(segment.text);
@@ -323,10 +352,10 @@ export const useLabelCanvas = (canvasRef, {
 
         // Check if segment is outside shape bounds or canvas bounds
         if (
-          segmentLeft < rect.x ||
-          segmentRight > rect.x + rect.width ||
-          (lineY) < rect.y ||
-          (lineY + segment.fontSize * 1.3) > rect.y + rect.height ||
+          segmentLeft < overlayRect.x ||
+          segmentRight > overlayRect.x + overlayRect.width ||
+          lineY < overlayRect.y ||
+          (lineY + segment.fontSize * 1.3) > overlayRect.y + overlayRect.height ||
           segmentLeft < 0 ||
           segmentRight > logicalSize ||
           (lineY) < 0 ||

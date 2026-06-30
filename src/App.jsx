@@ -22,11 +22,7 @@ export default function App() {
   const [imageUrl, setImageUrl] = useState(null);
   
   const [imageOffset, setImageOffset] = useState({ x: 0, y: 0 });
-  const [textSegments, setTextSegments] = useState([
-    { id: '1', text: 'John & Jane', fontSize: 26, color: '#000000', font: 'Playfair Display', offset: { x: 0, y: 0 } },
-    { id: '2', text: 'June 15, 2026', fontSize: 16, color: '#7a7a7a', font: 'Josefin Sans', offset: { x: 0, y: 0 } },
-    { id: '3', text: 'Napa Valley, CA', fontSize: 12, color: '#a3a3a3', font: 'Raleway', offset: { x: 0, y: 0 } }
-  ]);
+  const [textSegments, setTextSegments] = useState([]);
   const [repositionMode, setRepositionMode] = useState('none'); // 'none', 'image', 'text'
   const [activeTextId, setActiveTextId] = useState(null);
   const [uvEnabled, setUvEnabled] = useState(false);
@@ -41,13 +37,20 @@ export default function App() {
   // UV toggle handler
   const handleUvToggle = () => setUvEnabled((prev) => !prev);
 
-  // --- SAMPLE IMAGE PRELOADING ---
-  const [sampleImage, setSampleImage] = useState(null);
+  // --- SAMPLE IMAGE PRELOADING (per shape) ---
+  const [sampleImages, setSampleImages] = useState({});
   useEffect(() => {
-    const img = new Image();
-    img.src = '/sample_1.jpg';
-    img.onload = () => setSampleImage(img);
+    SHAPES.forEach((shape) => {
+      if (!shape.sampleImage) return;
+      const img = new Image();
+      img.src = shape.sampleImage;
+      img.onload = () => {
+        setSampleImages((prev) => ({ ...prev, [shape.id]: img }));
+      };
+    });
   }, []);
+
+  const sampleImage = sampleImages[selectedShape] || null;
 
   const openEditorForShape = (shapeId) => {
     setSelectedShape(shapeId);
@@ -132,11 +135,7 @@ export default function App() {
     setCart((prev) => [...prev, newItem]);
 
     // 5. Reset customizing designer states back to standard defaults for the next order
-    setTextSegments([
-      { id: '1', text: 'John & Jane', fontSize: 26, color: '#000000', font: 'Playfair Display', offset: { x: 0, y: 0 } },
-      { id: '2', text: 'June 15, 2026', fontSize: 16, color: '#7a7a7a', font: 'Josefin Sans', offset: { x: 0, y: 0 } },
-      { id: '3', text: 'Napa Valley, CA', fontSize: 12, color: '#a3a3a3', font: 'Raleway', offset: { x: 0, y: 0 } }
-    ]);
+    setTextSegments([]);
     setActiveTextId(null);
     setUploadedImage(null);
     setImageUrl(null);
@@ -174,7 +173,7 @@ export default function App() {
                       <GalleryShapePreview shape={s} />
                     </div>
                     <div className="text-lg font-semibold text-luxury-charcoal">{s.name}</div>
-                    <div className="text-sm text-gray-500 mt-1">Click to customize</div>
+                    <div className="text-sm text-gray-500 mt-1">{s.description}</div>
                   </button>
               ))}
             </div>

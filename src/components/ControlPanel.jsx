@@ -74,7 +74,7 @@ export default function ControlPanel({
             </div>
             <div className="ml-4">
               <div className="font-semibold text-base text-luxury-charcoal">{(SHAPES.find(s => s.id === selectedShape) || SHAPES[0]).name}</div>
-              <div className="text-xs text-gray-500">{selectedShape.replace(/_/g, ' ')}</div>
+              <div className="text-xs text-gray-500">{(SHAPES.find(s => s.id === selectedShape) || SHAPES[0]).description}</div>
             </div>
           </div>
           <div>
