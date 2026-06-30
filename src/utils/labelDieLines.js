@@ -1,0 +1,428 @@
+const dieLineCache = new Map();
+const foilClipCache = new Map();
+
+function cacheKey(sampleSrc, w, h, innerInset) {
+  return `${sampleSrc}|${w}|${h}|${innerInset}`;
+}
+
+function foilClipCacheKey(foilSrc, w, h) {
+  return `${foilSrc}|${w}|${h}`;
+}
+
+function readAlpha(imageData, x, y, width) {
+  return imageData.data[(y * width + x) * 4 + 3];
+}
+
+function buildOpaqueGrid(imageData, width, height, threshold = 128) {
+  const grid = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      grid[y * width + x] = readAlpha(imageData, x, y, width) >= threshold ? 1 : 0;
+    }
+  }
+  return grid;
+}
+
+function erodeGrid(grid, width, height, radius) {
+  if (radius <= 0) return grid.slice();
+  const out = new Uint8Array(width * height);
+  const r2 = radius * radius;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (!grid[y * width + x]) continue;
+      let keep = true;
+      for (let dy = -radius; dy <= radius && keep; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height || dx * dx + dy * dy > r2) {
+            keep = false;
+            break;
+          }
+          if (!grid[ny * width + nx]) {
+            keep = false;
+            break;
+          }
+        }
+      }
+      if (keep) out[y * width + x] = 1;
+    }
+  }
+  return out;
+}
+
+function extractEdgePoints(grid, width, height) {
+  const points = [];
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      if (!grid[y * width + x]) continue;
+      const neighborClear =
+        !grid[y * width + (x - 1)] ||
+        !grid[y * width + (x + 1)] ||
+        !grid[(y - 1) * width + x] ||
+        !grid[(y + 1) * width + x];
+      if (neighborClear) points.push({ x, y });
+    }
+  }
+  return points;
+}
+
+function orderEdgePoints(points) {
+  if (points.length === 0) return [];
+  const remaining = points.slice();
+  const ordered = [remaining.shift()];
+  while (remaining.length > 0) {
+    const last = ordered[ordered.length - 1];
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const dx = remaining[i].x - last.x;
+      const dy = remaining[i].y - last.y;
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
+      }
+    }
+    if (bestDist > 64) break;
+    ordered.push(remaining.splice(bestIdx, 1)[0]);
+  }
+  return ordered;
+}
+
+function simplifyPoints(points, minDistance = 2) {
+  if (points.length <= 2) return points;
+  const simplified = [points[0]];
+  for (let i = 1; i < points.length; i++) {
+    const prev = simplified[simplified.length - 1];
+    const dx = points[i].x - prev.x;
+    const dy = points[i].y - prev.y;
+    if (dx * dx + dy * dy >= minDistance * minDistance) simplified.push(points[i]);
+  }
+  return simplified;
+}
+
+function pointsToPath(points, offsetX, offsetY) {
+  if (points.length < 2) return null;
+  const path = new Path2D();
+  path.moveTo(points[0].x + offsetX, points[0].y + offsetY);
+  for (let i = 1; i < points.length; i++) {
+    path.lineTo(points[i].x + offsetX, points[i].y + offsetY);
+  }
+  path.closePath();
+  return path;
+}
+
+export function computeSampleLabelLayout(sampleImg, maxTargetSize = 420) {
+  const imgRatio = sampleImg.width / sampleImg.height;
+  let w;
+  let h;
+  if (imgRatio >= 1) {
+    w = maxTargetSize;
+    h = maxTargetSize / imgRatio;
+  } else {
+    h = maxTargetSize;
+    w = maxTargetSize * imgRatio;
+  }
+  return {
+    x: 300 - w / 2,
+    y: 300 - h / 2,
+    w,
+    h
+  };
+}
+
+export function getSampleAlphaData(sampleImg, layout) {
+  const off = document.createElement('canvas');
+  off.width = Math.max(1, Math.round(layout.w));
+  off.height = Math.max(1, Math.round(layout.h));
+  const ctx = off.getContext('2d');
+  ctx.drawImage(sampleImg, 0, 0, off.width, off.height);
+  return ctx.getImageData(0, 0, off.width, off.height);
+}
+
+function drawEdgeContour(ctx, grid, width, height, offsetX, offsetY, strokeStyle, lineWidth = 1.5) {
+  ctx.save();
+  ctx.fillStyle = strokeStyle;
+  const half = Math.max(0, Math.floor(lineWidth / 2));
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      if (!grid[y * width + x]) continue;
+      const edge =
+        !grid[y * width + (x - 1)] ||
+        !grid[y * width + (x + 1)] ||
+        !grid[(y - 1) * width + x] ||
+        !grid[(y + 1) * width + x];
+      if (edge) {
+        ctx.fillRect(offsetX + x - half, offsetY + y - half, lineWidth, lineWidth);
+      }
+    }
+  }
+  ctx.restore();
+}
+
+export function getDieLineData(sampleImg, layout, options = {}) {
+  const {
+    innerInsetRatio = 0.034,
+    drawInnerDieLine = true,
+    sampleSrc = sampleImg.src
+  } = options;
+
+  const innerInset = drawInnerDieLine
+    ? Math.max(2, Math.round(Math.min(layout.w, layout.h) * innerInsetRatio))
+    : 0;
+  const key = cacheKey(sampleSrc, layout.w, layout.h, innerInset);
+  if (dieLineCache.has(key)) return dieLineCache.get(key);
+
+  const imageData = getSampleAlphaData(sampleImg, layout);
+  const width = imageData.width;
+  const height = imageData.height;
+  const opaque = buildOpaqueGrid(imageData, width, height);
+
+  const outerPoints = simplifyPoints(orderEdgePoints(extractEdgePoints(opaque, width, height)), 2);
+  const outerPath = pointsToPath(outerPoints, layout.x, layout.y);
+
+  let innerGrid = null;
+  if (drawInnerDieLine && innerInset > 0) {
+    innerGrid = erodeGrid(opaque, width, height, innerInset);
+  }
+
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = width;
+  maskCanvas.height = height;
+  const maskCtx = maskCanvas.getContext('2d');
+  maskCtx.putImageData(imageData, 0, 0);
+
+  const data = {
+    outerPath,
+    outerGrid: opaque,
+    innerGrid,
+    maskCanvas,
+    layout,
+    gridSize: { width, height }
+  };
+  dieLineCache.set(key, data);
+  return data;
+}
+
+export function drawImageWithSampleMask(ctx, userImg, maskCanvas, layout, imgDraw) {
+  const off = document.createElement('canvas');
+  off.width = maskCanvas.width;
+  off.height = maskCanvas.height;
+  const offCtx = off.getContext('2d');
+
+  const scaleX = off.width / layout.w;
+  const scaleY = off.height / layout.h;
+  const source = imgDraw || layout;
+  const drawX = (source.x - layout.x) * scaleX;
+  const drawY = (source.y - layout.y) * scaleY;
+  const drawW = source.w * scaleX;
+  const drawH = source.h * scaleY;
+
+  offCtx.drawImage(userImg, drawX, drawY, drawW, drawH);
+  offCtx.globalCompositeOperation = 'destination-in';
+  offCtx.drawImage(maskCanvas, 0, 0);
+  ctx.drawImage(off, layout.x, layout.y, layout.w, layout.h);
+}
+
+export function drawDieLines(ctx, dieData, { strokeOuter = '#c9a84c', strokeInner = 'rgba(255,255,255,0.55)', lineWidth = 1.5 } = {}) {
+  if (!dieData) return;
+  const { layout, gridSize } = dieData;
+
+  if (dieData.outerGrid) {
+    drawEdgeContour(ctx, dieData.outerGrid, gridSize.width, gridSize.height, layout.x, layout.y, strokeOuter, lineWidth);
+  } else if (dieData.outerPath) {
+    ctx.save();
+    ctx.strokeStyle = strokeOuter;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke(dieData.outerPath);
+    ctx.restore();
+  }
+
+  if (dieData.innerGrid) {
+    drawEdgeContour(
+      ctx,
+      dieData.innerGrid,
+      gridSize.width,
+      gridSize.height,
+      layout.x,
+      layout.y,
+      strokeInner,
+      Math.max(1, lineWidth - 0.25)
+    );
+  }
+}
+
+export function clearDieLineCache() {
+  dieLineCache.clear();
+  foilClipCache.clear();
+}
+
+function findPhotoClipSeed(opaque, width, height) {
+  const cx = Math.floor(width / 2);
+  const cy = Math.floor(height / 2);
+  if (!opaque[cy * width + cx]) return { x: cx, y: cy };
+
+  const maxRadius = Math.max(width, height);
+  for (let radius = 1; radius <= maxRadius; radius++) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+        const x = cx + dx;
+        const y = cy + dy;
+        if (x < 0 || y < 0 || x >= width || y >= height) continue;
+        if (!opaque[y * width + x]) return { x, y };
+      }
+    }
+  }
+  return null;
+}
+
+function floodFillInterior(opaque, width, height, seed) {
+  const filled = new Uint8Array(width * height);
+  if (!seed) return filled;
+
+  const queue = [seed];
+  filled[seed.y * width + seed.x] = 1;
+
+  while (queue.length > 0) {
+    const { x, y } = queue.pop();
+    const neighbors = [
+      { x: x - 1, y },
+      { x: x + 1, y },
+      { x, y: y - 1 },
+      { x, y: y + 1 }
+    ];
+    for (const n of neighbors) {
+      if (n.x < 0 || n.y < 0 || n.x >= width || n.y >= height) continue;
+      const idx = n.y * width + n.x;
+      if (filled[idx] || opaque[idx]) continue;
+      filled[idx] = 1;
+      queue.push(n);
+    }
+  }
+  return filled;
+}
+
+function filledRegionToMaskCanvas(filled, width, height) {
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = width;
+  maskCanvas.height = height;
+  const maskCtx = maskCanvas.getContext('2d');
+  const maskData = maskCtx.createImageData(width, height);
+  for (let i = 0; i < width * height; i++) {
+    if (filled[i]) maskData.data[i * 4 + 3] = 255;
+  }
+  maskCtx.putImageData(maskData, 0, 0);
+  return maskCanvas;
+}
+
+function intersectMaskCanvases(primaryMask, secondaryMask) {
+  const width = primaryMask.width;
+  const height = primaryMask.height;
+  const out = document.createElement('canvas');
+  out.width = width;
+  out.height = height;
+  const ctx = out.getContext('2d');
+  ctx.drawImage(primaryMask, 0, 0);
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.drawImage(secondaryMask, 0, 0);
+  return out;
+}
+
+export function getFoilBorderClipData(foilBorderImg, layout, dieData, options = {}) {
+  const { foilSrc = foilBorderImg.src } = options;
+  const width = Math.max(1, Math.round(layout.w));
+  const height = Math.max(1, Math.round(layout.h));
+  const key = foilClipCacheKey(foilSrc, width, height);
+  if (foilClipCache.has(key)) return foilClipCache.get(key);
+
+  const off = document.createElement('canvas');
+  off.width = width;
+  off.height = height;
+  const ctx = off.getContext('2d');
+  ctx.drawImage(foilBorderImg, 0, 0, width, height);
+  const imageData = ctx.getImageData(0, 0, width, height);
+
+  const opaque = new Uint8Array(width * height);
+  for (let i = 0; i < width * height; i++) {
+    opaque[i] = imageData.data[i * 4 + 3] >= 128 ? 1 : 0;
+  }
+
+  const seed = findPhotoClipSeed(opaque, width, height);
+  const filled = floodFillInterior(opaque, width, height, seed);
+  let photoClipMask = filledRegionToMaskCanvas(filled, width, height);
+
+  if (dieData?.maskCanvas) {
+    photoClipMask = intersectMaskCanvases(photoClipMask, dieData.maskCanvas);
+  }
+
+  const data = {
+    photoClipMask,
+    layout,
+    renderOverlay: foilBorderHasRenderableArtwork(imageData)
+  };
+  foilClipCache.set(key, data);
+  return data;
+}
+
+function foilBorderHasRenderableArtwork(imageData) {
+  const pixels = imageData.data;
+  for (let i = 0; i < pixels.length; i += 4) {
+    const r = pixels[i];
+    const g = pixels[i + 1];
+    const b = pixels[i + 2];
+    const a = pixels[i + 3];
+    if (a < 128) continue;
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (r > 100 && g > 70 && b < 160 && r - b > 40) return true;
+    if (Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && lum > 100 && lum < 235) return true;
+  }
+  return false;
+}
+
+import { MATERIALS } from '../config/pricing';
+
+export function drawFoilBorderWithMaterial(ctx, foilBorderImg, layout, materialId) {
+  const material = MATERIALS.find((m) => m.id === materialId) || MATERIALS[0];
+  const w = Math.max(1, Math.round(layout.w));
+  const h = Math.max(1, Math.round(layout.h));
+
+  const off = document.createElement('canvas');
+  off.width = w;
+  off.height = h;
+  const offCtx = off.getContext('2d');
+
+  offCtx.drawImage(foilBorderImg, 0, 0, w, h);
+  offCtx.globalCompositeOperation = 'source-in';
+
+  const gradient = offCtx.createLinearGradient(0, 0, w, h);
+  if (material.overlayType === 'gradient') {
+    if (material.id === 'digital-gold') {
+      gradient.addColorStop(0, '#c9a227');
+      gradient.addColorStop(0.45, '#f0dfa0');
+      gradient.addColorStop(1, '#a67c00');
+    } else {
+      gradient.addColorStop(0, '#a8a8a8');
+      gradient.addColorStop(0.45, '#e4e4e4');
+      gradient.addColorStop(1, '#888888');
+    }
+  } else {
+    material.stops.forEach((stop) => gradient.addColorStop(stop.offset, stop.color));
+  }
+  offCtx.fillStyle = gradient;
+  offCtx.fillRect(0, 0, w, h);
+
+  if (material.overlayType === 'metallic') {
+    offCtx.globalCompositeOperation = 'source-atop';
+    const highlight = offCtx.createLinearGradient(0, 0, w * 0.7, h * 0.5);
+    highlight.addColorStop(0, 'rgba(255,255,255,0)');
+    highlight.addColorStop(0.3, 'rgba(255,255,255,0.4)');
+    highlight.addColorStop(0.55, 'rgba(255,255,255,0.08)');
+    highlight.addColorStop(1, 'rgba(255,255,255,0)');
+    offCtx.fillStyle = highlight;
+    offCtx.fillRect(0, 0, w, h);
+  }
+
+  ctx.drawImage(off, layout.x, layout.y, layout.w, layout.h);
+}

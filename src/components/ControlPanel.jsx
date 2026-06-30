@@ -1,5 +1,5 @@
 import React from 'react';
-import { SHAPES } from '../config/shapes';
+import { SHAPES, shapeHasFoilBorder } from '../config/shapes';
 import MaterialSelector from './MaterialSelector';
 import ImageUploader from './ImageUploader';
 import TextControls from './TextControls';
@@ -38,7 +38,10 @@ export default function ControlPanel({
     }
   };
   // Calculate total pricing based on selected material and quantity
-  const { unitPrice, total } = calculateTotal(selectedMaterial, quantity, uvEnabled);
+  const activeShape = SHAPES.find((s) => s.id === selectedShape) || SHAPES[0];
+  const hasFoilBorder = shapeHasFoilBorder(activeShape);
+  const materialForPricing = hasFoilBorder ? selectedMaterial : null;
+  const { unitPrice, total } = calculateTotal(materialForPricing, quantity, uvEnabled);
 
   return (
     <div className="w-full lg:w-[40%] bg-luxury-white flex flex-col h-full border-t lg:border-t-0 lg:border-l border-gray-200 relative">
@@ -91,6 +94,7 @@ export default function ControlPanel({
               selectedMaterial={selectedMaterial}
               onSelectMaterial={onSelectMaterial}
               disabled={repositionMode !== 'none'}
+              hasFoilBorder={hasFoilBorder}
             />
 
             <ImageUploader
@@ -214,7 +218,11 @@ export default function ControlPanel({
           {/* Pricing breakdown */}
           <div className="space-y-1.5 text-xs">
           <div className="flex justify-between text-gray-500 font-medium">
-            <span>Material: {selectedMaterial.replace('-', ' ').toUpperCase()}</span>
+            <span>
+              {hasFoilBorder
+                ? `Border: ${selectedMaterial.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}`
+                : 'Print: Standard 4CP'}
+            </span>
             <span>${unitPrice.toFixed(2)} / unit</span>
           </div>
           <div className="flex justify-between text-gray-500 font-medium">

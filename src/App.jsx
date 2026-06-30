@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import PreviewPanel from './components/PreviewPanel';
 import ControlPanel from './components/ControlPanel';
 import GalleryShapePreview from './components/GalleryShapePreview';
-import { SHAPES } from './config/shapes';
+import { SHAPES, shapeHasFoilBorder } from './config/shapes';
 import Toast from './components/Toast';
 import CartModal from './components/CartModal';
 import { useLabelCanvas } from './hooks/useLabelCanvas';
@@ -39,18 +39,28 @@ export default function App() {
 
   // --- SAMPLE IMAGE PRELOADING (per shape) ---
   const [sampleImages, setSampleImages] = useState({});
+  const [foilBorderImages, setFoilBorderImages] = useState({});
   useEffect(() => {
     SHAPES.forEach((shape) => {
-      if (!shape.sampleImage) return;
-      const img = new Image();
-      img.src = shape.sampleImage;
-      img.onload = () => {
-        setSampleImages((prev) => ({ ...prev, [shape.id]: img }));
-      };
+      if (shape.sampleImage) {
+        const img = new Image();
+        img.src = shape.sampleImage;
+        img.onload = () => {
+          setSampleImages((prev) => ({ ...prev, [shape.id]: img }));
+        };
+      }
+      if (shape.foilBorderImage) {
+        const foilImg = new Image();
+        foilImg.src = shape.foilBorderImage;
+        foilImg.onload = () => {
+          setFoilBorderImages((prev) => ({ ...prev, [shape.id]: foilImg }));
+        };
+      }
     });
   }, []);
 
   const sampleImage = sampleImages[selectedShape] || null;
+  const foilBorderImage = foilBorderImages[selectedShape] || null;
 
   const openEditorForShape = (shapeId) => {
     setSelectedShape(shapeId);
@@ -63,6 +73,7 @@ export default function App() {
     selectedMaterial,
     uploadedImage,
     sampleImage,
+    foilBorderImage,
     imageOffset,
     textSegments,
     repositionMode,
@@ -118,12 +129,15 @@ export default function App() {
     }
 
     // 3. Compute price breakdown
-    const { unitPrice, total } = calculateTotal(selectedMaterial, quantity, uvEnabled);
+    const activeShape = SHAPES.find((s) => s.id === selectedShape);
+    const hasFoilBorder = shapeHasFoilBorder(activeShape);
+    const materialForPricing = hasFoilBorder ? selectedMaterial : null;
+    const { unitPrice, total } = calculateTotal(materialForPricing, quantity, uvEnabled);
 
     // 4. Append item to cart array
     const newItem = {
       shape: selectedShape,
-      material: selectedMaterial,
+      material: materialForPricing,
       textSegments,
       uvEnabled,
       quantity,

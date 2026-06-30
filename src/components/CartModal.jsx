@@ -106,7 +106,9 @@ export default function CartModal({
               <div className="space-y-4">
                 {cartItems.map((item, index) => {
                   const shapeName = SHAPES.find((s) => s.id === item.shape)?.name || item.shape;
-                  const materialName = MATERIALS.find((m) => m.id === item.material)?.name || item.material;
+                  const materialName = item.material
+                    ? (MATERIALS.find((m) => m.id === item.material)?.name || item.material)
+                    : 'Standard 4CP';
 
                   return (
                     <div key={index} className="flex space-x-4 p-3 border border-gray-100 rounded-lg bg-gray-50/50">

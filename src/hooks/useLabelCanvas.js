@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react';
-import { SHAPES } from '../config/shapes';
-import { MATERIALS } from '../config/pricing';
+import { SHAPES, shapeHasFoilBorder } from '../config/shapes';
+import {
+  computeSampleLabelLayout,
+  drawDieLines,
+  drawFoilBorderWithMaterial,
+  drawImageWithSampleMask,
+  getDieLineData,
+  getFoilBorderClipData
+} from '../utils/labelDieLines';
 
 export const useLabelCanvas = (canvasRef, {
   selectedShape,
   selectedMaterial,
   uploadedImage,
   sampleImage,
+  foilBorderImage,
   imageOffset,
   textSegments,
   repositionMode,
@@ -119,26 +127,44 @@ export const useLabelCanvas = (canvasRef, {
     const activeImg = uploadedImage || sampleImage;
     const isSample = !uploadedImage && sampleImage;
     const isSampleLabel = isSample && !shape.clipSampleToShape;
+    const usesSampleDieLines = Boolean(uploadedImage && sampleImage);
+    const hasFoilBorder = shapeHasFoilBorder(shape) && Boolean(foilBorderImage);
+
+    let labelLayout = sampleImage ? computeSampleLabelLayout(sampleImage, maxTargetSize) : null;
+    let dieData = null;
+    let foilClipData = null;
+    if (usesSampleDieLines && labelLayout) {
+      dieData = getDieLineData(sampleImage, labelLayout, {
+        drawInnerDieLine: shape.dieLines?.inner !== false,
+        innerInsetRatio: shape.dieLines?.innerInsetRatio ?? 0.034,
+        sampleSrc: shape.sampleImage
+      });
+      if (hasFoilBorder) {
+        foilClipData = getFoilBorderClipData(foilBorderImage, labelLayout, dieData, {
+          foilSrc: shape.foilBorderImage
+        });
+      }
+    }
 
     if (activeImg) {
       const imgW = activeImg.width;
       const imgH = activeImg.height;
       const imgRatio = imgW / imgH;
-      const rectRatio = rect.width / rect.height;
 
       let drawW, drawH;
 
-      if (isSampleLabel) {
-        // Finished label artwork: size from the image itself, not the template shape
-        if (imgRatio >= 1) {
-          drawW = maxTargetSize;
-          drawH = maxTargetSize / imgRatio;
+      if (isSampleLabel || usesSampleDieLines) {
+        const bounds = labelLayout;
+        const boundsRatio = bounds.w / bounds.h;
+        if (imgRatio > boundsRatio) {
+          drawH = bounds.h;
+          drawW = drawH * imgRatio;
         } else {
-          drawH = maxTargetSize;
-          drawW = maxTargetSize * imgRatio;
+          drawW = bounds.w;
+          drawH = drawW / imgRatio;
         }
       } else if (isSample && shape.clipSampleToShape) {
-        // Photo cropped to shape (e.g. squircle): cover fit, optionally zoomed out
+        const rectRatio = rect.width / rect.height;
         if (imgRatio > rectRatio) {
           drawH = rect.height;
           drawW = drawH * imgRatio;
@@ -147,7 +173,7 @@ export const useLabelCanvas = (canvasRef, {
           drawH = drawW / imgRatio;
         }
       } else {
-        // User upload: cover fit inside template shape
+        const rectRatio = rect.width / rect.height;
         if (imgRatio > rectRatio) {
           drawH = rect.height;
           drawW = drawH * imgRatio;
@@ -159,12 +185,16 @@ export const useLabelCanvas = (canvasRef, {
 
       let finalW = drawW;
       let finalH = drawH;
-      let finalX = isSampleLabel
-        ? 300 - drawW / 2
-        : rect.x + (rect.width - drawW) / 2;
-      let finalY = isSampleLabel
-        ? 300 - drawH / 2
-        : rect.y + (rect.height - drawH) / 2;
+      let finalX;
+      let finalY;
+
+      if (isSampleLabel || usesSampleDieLines) {
+        finalX = labelLayout.x + (labelLayout.w - drawW) / 2;
+        finalY = labelLayout.y + (labelLayout.h - drawH) / 2;
+      } else {
+        finalX = rect.x + (rect.width - drawW) / 2;
+        finalY = rect.y + (rect.height - drawH) / 2;
+      }
 
       if (isSample && shape.clipSampleToShape) {
         const scale = shape.sampleImageScale ?? 1;
@@ -182,14 +212,16 @@ export const useLabelCanvas = (canvasRef, {
       };
     }
 
-    const overlayRect = isSampleLabel && imgDraw
-      ? { x: imgDraw.x, y: imgDraw.y, width: imgDraw.w, height: imgDraw.h }
-      : rect;
+    const overlayRect = (isSampleLabel || usesSampleDieLines) && labelLayout
+      ? { x: labelLayout.x, y: labelLayout.y, width: labelLayout.w, height: labelLayout.h }
+      : (isSampleLabel && imgDraw
+        ? { x: imgDraw.x, y: imgDraw.y, width: imgDraw.w, height: imgDraw.h }
+        : rect);
 
     // --- RENDER STACK ---
 
-    // Layer 1: Background Fill (template shape only — not for finished label samples)
-    if (!isSampleLabel) {
+    // Layer 1: Background Fill (legacy template path only)
+    if (!isSampleLabel && !usesSampleDieLines) {
       ctx.save();
       applyShapeTransform(ctx);
       const bgPath = defineShapePath(ctx);
@@ -200,9 +232,14 @@ export const useLabelCanvas = (canvasRef, {
       ctx.restore();
     }
 
-    // Layer 2: Image — label samples draw as-is; uploads/photos clip to template
+    // Layer 2: Image
     if (activeImg && imgDraw) {
-      if (isSampleLabel || (repositionMode === 'image' && uploadedImage)) {
+      if (usesSampleDieLines && (foilClipData || dieData) && !(repositionMode === 'image')) {
+        ctx.save();
+        const clipMask = foilClipData?.photoClipMask || dieData.maskCanvas;
+        drawImageWithSampleMask(ctx, activeImg, clipMask, labelLayout, imgDraw);
+        ctx.restore();
+      } else if (isSampleLabel || (repositionMode === 'image' && uploadedImage)) {
         ctx.save();
         ctx.drawImage(activeImg, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h);
         ctx.restore();
@@ -215,7 +252,7 @@ export const useLabelCanvas = (canvasRef, {
         ctx.drawImage(activeImg, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h);
         ctx.restore();
       }
-    } else if (!isSampleLabel) {
+    } else if (!isSampleLabel && !usesSampleDieLines) {
       // Placeholder Pattern (Always Clipped to Shape)
       ctx.save();
       applyShapeTransform(ctx);
@@ -236,33 +273,18 @@ export const useLabelCanvas = (canvasRef, {
       ctx.restore();
     }
 
-    // Layer 3: Material Overlay
-    ctx.save();
-    if (isSampleLabel) {
-      applyMaterialOverlay(ctx, overlayRect, selectedMaterial);
-    } else {
-      applyShapeTransform(ctx);
-      const matPath = defineShapePath();
-      if (matPath) ctx.clip(matPath); else ctx.clip();
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      applyMaterialOverlay(ctx, overlayRect, selectedMaterial);
-    }
-
-    if (!isSampleLabel) {
-      // Draw a stronger outline after material change so the selected material shape is clearer
+    // Layer 2b: Foil border with selected material finish (border only, not the photo area)
+    if (hasFoilBorder && labelLayout && !(repositionMode === 'image')) {
       ctx.save();
-      applyShapeTransform(ctx);
-      ctx.strokeStyle = selectedMaterial.startsWith('foil') ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
-      ctx.lineWidth = 2 / shapeScale;
-      const materialOutline = defineShapePath();
-      if (materialOutline) ctx.stroke(materialOutline);
+      drawFoilBorderWithMaterial(ctx, foilBorderImage, labelLayout, selectedMaterial);
       ctx.restore();
     }
 
   // UV coating overlay (subtle gloss)
   if (uvEnabled) {
     ctx.save();
-    if (isSampleLabel) {
+    if (isSampleLabel || usesSampleDieLines) {
+      if (usesSampleDieLines && dieData?.outerPath) ctx.clip(dieData.outerPath);
       ctx.fillStyle = 'rgba(255,255,255,0.12)';
       ctx.fillRect(overlayRect.x, overlayRect.y, overlayRect.width, overlayRect.height);
     } else {
@@ -275,10 +297,15 @@ export const useLabelCanvas = (canvasRef, {
     }
     ctx.restore();
   }
-    ctx.restore();
 
-    // Layer 4: Shape Outline (template only — label samples already include their shape)
-    if (!isSampleLabel) {
+    // Layer 4: Die lines / shape outline
+    if (usesSampleDieLines && dieData) {
+      drawDieLines(ctx, dieData, {
+        strokeOuter: '#c9a84c',
+        strokeInner: 'rgba(255,255,255,0.65)',
+        lineWidth: 1.5
+      });
+    } else if (!isSampleLabel) {
       ctx.save();
       applyShapeTransform(ctx);
       ctx.strokeStyle = '#2d2d2d';
@@ -399,22 +426,35 @@ export const useLabelCanvas = (canvasRef, {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
       ctx.fillRect(0, 0, logicalSize, logicalSize);
 
-      // Punch out the shape area so interior remains visible using destination-out
+      // Punch out the label area so interior remains visible
       ctx.save();
       ctx.globalCompositeOperation = 'destination-out';
-      applyShapeTransform(ctx);
-      const hole = defineShapePath();
-      if (hole) ctx.fill(hole);
+      if (usesSampleDieLines && dieData?.outerPath) {
+        ctx.fill(dieData.outerPath);
+      } else {
+        applyShapeTransform(ctx);
+        const hole = defineShapePath();
+        if (hole) ctx.fill(hole);
+      }
       ctx.restore();
 
-      // Stroke the shape with dashed gold to emphasize
+      // Stroke die lines to emphasize edit region
       ctx.save();
-      applyShapeTransform(ctx);
-      ctx.strokeStyle = '#c9a84c';
-      ctx.lineWidth = 2 / shapeScale;
-      ctx.setLineDash([4, 4]);
-      const strokePath = defineShapePath();
-      if (strokePath) ctx.stroke(strokePath);
+      if (usesSampleDieLines && dieData) {
+        ctx.setLineDash([4, 4]);
+        drawDieLines(ctx, dieData, {
+          strokeOuter: '#c9a84c',
+          strokeInner: '#c9a84c',
+          lineWidth: 2
+        });
+      } else {
+        applyShapeTransform(ctx);
+        ctx.strokeStyle = '#c9a84c';
+        ctx.lineWidth = 2 / shapeScale;
+        ctx.setLineDash([4, 4]);
+        const strokePath = defineShapePath();
+        if (strokePath) ctx.stroke(strokePath);
+      }
       ctx.restore();
 
       // Draw reposition message
@@ -433,6 +473,7 @@ export const useLabelCanvas = (canvasRef, {
     selectedMaterial,
     uploadedImage,
     sampleImage,
+    foilBorderImage,
     imageOffset,
     textSegments,
     repositionMode,
@@ -440,59 +481,4 @@ export const useLabelCanvas = (canvasRef, {
     fontsLoaded,
     setHasTextOverflow
   ]);
-};
-
-// Helper: Material Overlay stop configurations
-const applyMaterialOverlay = (ctx, rect, materialId) => {
-  ctx.save();
-  const material = MATERIALS.find((m) => m.id === materialId) || MATERIALS[0];
-  const gradient = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
-
-  if (material.overlayType === 'gradient') {
-    if (materialId === 'digital-gold') {
-      gradient.addColorStop(0, 'rgba(212, 175, 55, 0.30)');
-      gradient.addColorStop(0.5, 'rgba(255, 235, 170, 0.24)');
-      gradient.addColorStop(1, 'rgba(180, 140, 30, 0.30)');
-    } else { // digital-silver
-      gradient.addColorStop(0, 'rgba(192, 192, 192, 0.30)');
-      gradient.addColorStop(0.5, 'rgba(240, 240, 240, 0.22)');
-      gradient.addColorStop(1, 'rgba(140, 140, 140, 0.30)');
-    }
-    ctx.fillStyle = gradient;
-    ctx.fillRect(rect.x - 10, rect.y - 10, rect.width + 20, rect.height + 20);
-  } else if (material.overlayType === 'metallic') {
-    ctx.globalCompositeOperation = 'overlay';
-
-    if (materialId === 'foil-gold') {
-      ctx.fillStyle = 'rgba(201, 168, 76, 0.18)';
-      ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
-    } else if (materialId === 'foil-silver') {
-      ctx.fillStyle = 'rgba(138, 149, 151, 0.18)';
-      ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
-    } else if (materialId === 'foil-rose-gold') {
-      ctx.fillStyle = 'rgba(183, 110, 121, 0.18)';
-      ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
-    }
-
-    material.stops.forEach((stop) => {
-      let color = stop.color;
-      if (materialId === 'foil-gold') {
-        color = stop.offset === 0.25 || stop.offset === 0.75 ? 'rgba(255, 248, 220, 0.18)' : 'rgba(201, 168, 76, 0.45)';
-      } else if (materialId === 'foil-silver') {
-        color = stop.offset === 0.25 || stop.offset === 0.75 ? 'rgba(255, 255, 255, 0.18)' : 'rgba(138, 149, 151, 0.45)';
-      } else if (materialId === 'foil-rose-gold') {
-        color = stop.offset === 0.25 || stop.offset === 0.75 ? 'rgba(255, 209, 220, 0.18)' : 'rgba(183, 110, 121, 0.45)';
-      }
-      gradient.addColorStop(stop.offset, color);
-    });
-
-    ctx.fillStyle = gradient;
-    ctx.fillRect(rect.x - 10, rect.y - 10, rect.width + 20, rect.height + 20);
-
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
-    ctx.fillRect(rect.x - 10, rect.y - 10, rect.width + 20, rect.height + 20);
-  }
-
-  ctx.restore();
 };
