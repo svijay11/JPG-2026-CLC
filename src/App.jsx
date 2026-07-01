@@ -43,6 +43,7 @@ export default function App() {
   const [sampleImages, setSampleImages] = useState({});
   const [foilBorderImages, setFoilBorderImages] = useState({});
   const [dieLineImages, setDieLineImages] = useState({});
+  const [bleedImages, setBleedImages] = useState({});
   useEffect(() => {
     SHAPES.forEach((shape) => {
       if (shape.sampleImage) {
@@ -66,12 +67,20 @@ export default function App() {
           setDieLineImages((prev) => ({ ...prev, [shape.id]: dieImg }));
         };
       }
+      if (shape.bleedImage) {
+        const bleedImg = new Image();
+        bleedImg.src = shape.bleedImage;
+        bleedImg.onload = () => {
+          setBleedImages((prev) => ({ ...prev, [shape.id]: bleedImg }));
+        };
+      }
     });
   }, []);
 
   const sampleImage = sampleImages[selectedShape] || null;
   const foilBorderImage = foilBorderImages[selectedShape] || null;
   const dieLineImage = dieLineImages[selectedShape] || null;
+  const bleedImage = bleedImages[selectedShape] || null;
 
   const openEditorForShape = (shapeId) => {
     const shape = SHAPES.find((s) => s.id === shapeId);
@@ -103,6 +112,7 @@ export default function App() {
     sampleImage,
     foilBorderImage,
     dieLineImage,
+    bleedImage,
     imageOffset,
     textSegments,
     repositionMode,

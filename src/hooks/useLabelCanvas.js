@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { SHAPES, shapeHasFoilBorder, shapeIsTextOnly } from '../config/shapes';
+import { SHAPES, shapeHasFoilBorder, shapeIsTextOnly, shapeHasBleedAssets } from '../config/shapes';
 import {
   computeSampleLabelLayout,
   drawDieLines,
   drawFoilBorderWithMaterial,
   drawImageWithSampleMask,
+  getBleedDieLineData,
   getDieLineData,
   getFoilBorderClipData
 } from '../utils/labelDieLines';
@@ -20,6 +21,7 @@ export const useLabelCanvas = (canvasRef, {
   sampleImage,
   foilBorderImage,
   dieLineImage,
+  bleedImage,
   imageOffset,
   textSegments,
   repositionMode,
@@ -135,14 +137,30 @@ export const useLabelCanvas = (canvasRef, {
     const isSampleLabel = isSample && !shape.clipSampleToShape;
     const isTextOnlyShape = shapeIsTextOnly(shape);
     const usesSampleDieLines = Boolean(uploadedImage && sampleImage);
+    const usesBleedDieLines = shapeHasBleedAssets(shape) && Boolean(bleedImage && dieLineImage);
     const hasFoilBorder = shapeHasFoilBorder(shape) && Boolean(foilBorderImage);
     const fullBleed = isFullBleedMaterial(selectedMaterial);
     const showFoilBorder = hasFoilBorder && !fullBleed;
+    // Bleed zone is only shown in preview when there's no foil frame, or customer chose full bleed.
+    const showVisualBleed = usesBleedDieLines && Boolean(uploadedImage) && (!hasFoilBorder || fullBleed);
 
     let labelLayout = sampleImage ? computeSampleLabelLayout(sampleImage, maxTargetSize) : null;
+    let trimLayout = labelLayout;
+    let bleedLayoutRef = null;
     let dieData = null;
     let foilClipData = null;
-    if (labelLayout) {
+
+    if (usesBleedDieLines) {
+      dieData = getBleedDieLineData(bleedImage, dieLineImage, maxTargetSize);
+      bleedLayoutRef = dieData.bleedLayout;
+      trimLayout = dieData.trimLayout;
+      labelLayout = trimLayout;
+      if (hasFoilBorder && !fullBleed) {
+        foilClipData = getFoilBorderClipData(foilBorderImage, trimLayout, dieData, {
+          foilSrc: shape.foilBorderImage
+        });
+      }
+    } else if (labelLayout) {
       if (usesSampleDieLines) {
         dieData = getDieLineData(sampleImage, labelLayout, {
           drawInnerDieLine: shape.dieLines?.inner !== false,
@@ -170,10 +188,19 @@ export const useLabelCanvas = (canvasRef, {
 
       let drawW, drawH;
 
-      if (isSampleLabel || usesSampleDieLines) {
-        const bounds = labelLayout;
+      if (isSampleLabel || usesSampleDieLines || usesBleedDieLines) {
+        const bounds = showVisualBleed ? bleedLayoutRef : labelLayout;
         const boundsRatio = bounds.w / bounds.h;
-        if (imgRatio > boundsRatio) {
+        const coverFit = showVisualBleed;
+        if (coverFit) {
+          if (imgRatio > boundsRatio) {
+            drawH = bounds.h;
+            drawW = drawH * imgRatio;
+          } else {
+            drawW = bounds.w;
+            drawH = drawW / imgRatio;
+          }
+        } else if (imgRatio > boundsRatio) {
           drawH = bounds.h;
           drawW = drawH * imgRatio;
         } else {
@@ -205,9 +232,10 @@ export const useLabelCanvas = (canvasRef, {
       let finalX;
       let finalY;
 
-      if (isSampleLabel || usesSampleDieLines) {
-        finalX = labelLayout.x + (labelLayout.w - drawW) / 2;
-        finalY = labelLayout.y + (labelLayout.h - drawH) / 2;
+      if (isSampleLabel || usesSampleDieLines || usesBleedDieLines) {
+        const bounds = showVisualBleed ? bleedLayoutRef : labelLayout;
+        finalX = bounds.x + (bounds.w - drawW) / 2;
+        finalY = bounds.y + (bounds.h - drawH) / 2;
       } else {
         finalX = rect.x + (rect.width - drawW) / 2;
         finalY = rect.y + (rect.height - drawH) / 2;
@@ -229,11 +257,13 @@ export const useLabelCanvas = (canvasRef, {
       };
     }
 
-    const overlayRect = (isSampleLabel || usesSampleDieLines) && labelLayout
-      ? { x: labelLayout.x, y: labelLayout.y, width: labelLayout.w, height: labelLayout.h }
-      : (isSampleLabel && imgDraw
-        ? { x: imgDraw.x, y: imgDraw.y, width: imgDraw.w, height: imgDraw.h }
-        : rect);
+    const overlayRect = dieData?.hasBleed && trimLayout
+      ? { x: trimLayout.x, y: trimLayout.y, width: trimLayout.w, height: trimLayout.h }
+      : ((isSampleLabel || usesSampleDieLines) && labelLayout
+        ? { x: labelLayout.x, y: labelLayout.y, width: labelLayout.w, height: labelLayout.h }
+        : (isSampleLabel && imgDraw
+          ? { x: imgDraw.x, y: imgDraw.y, width: imgDraw.w, height: imgDraw.h }
+          : rect));
 
     // --- RENDER STACK ---
 
@@ -251,12 +281,13 @@ export const useLabelCanvas = (canvasRef, {
 
     // Layer 2: Image
     if (activeImg && imgDraw) {
-      if (usesSampleDieLines && dieData && !(repositionMode === 'image')) {
+      if ((usesSampleDieLines || usesBleedDieLines) && dieData && uploadedImage && !(repositionMode === 'image')) {
         ctx.save();
-        const clipMask = fullBleed
-          ? dieData.maskCanvas
+        const clipMask = showVisualBleed
+          ? (dieData.bleedMaskCanvas || dieData.maskCanvas)
           : (foilClipData?.photoClipMask || dieData.maskCanvas);
-        drawImageWithSampleMask(ctx, activeImg, clipMask, labelLayout, imgDraw);
+        const clipLayout = showVisualBleed && dieData.hasBleed ? dieData.bleedLayout : labelLayout;
+        drawImageWithSampleMask(ctx, activeImg, clipMask, clipLayout, imgDraw);
         ctx.restore();
       } else if (isSampleLabel || (repositionMode === 'image' && uploadedImage)) {
         ctx.save();
@@ -323,11 +354,12 @@ export const useLabelCanvas = (canvasRef, {
   }
 
     // Layer 4: Die lines / shape outline
-    if (dieData && (usesSampleDieLines || shape.dieLineImage)) {
+    if (dieData && (usesSampleDieLines || shape.dieLineImage || dieData.hasBleed)) {
       drawDieLines(ctx, dieData, {
         strokeOuter: shape.dieLines?.strokeMode === 'magenta' ? '#d946a8' : '#c9a84c',
         strokeInner: 'rgba(255,255,255,0.65)',
-        lineWidth: 1.5
+        lineWidth: 1.5,
+        showBleedLine: showVisualBleed
       });
     } else if (!isSampleLabel) {
       ctx.save();
@@ -467,6 +499,8 @@ export const useLabelCanvas = (canvasRef, {
       ctx.globalCompositeOperation = 'destination-out';
       if (dieData?.outerPath) {
         ctx.fill(dieData.outerPath);
+      } else if (trimLayout) {
+        ctx.fillRect(trimLayout.x, trimLayout.y, trimLayout.w, trimLayout.h);
       } else if (labelLayout) {
         ctx.fillRect(labelLayout.x, labelLayout.y, labelLayout.w, labelLayout.h);
       } else {
@@ -478,7 +512,7 @@ export const useLabelCanvas = (canvasRef, {
 
       // Stroke die lines to emphasize edit region
       ctx.save();
-      if (usesSampleDieLines && dieData) {
+      if ((usesSampleDieLines || dieData?.hasBleed) && dieData) {
         ctx.setLineDash([4, 4]);
         drawDieLines(ctx, dieData, {
           strokeOuter: '#c9a84c',
@@ -513,6 +547,7 @@ export const useLabelCanvas = (canvasRef, {
     sampleImage,
     foilBorderImage,
     dieLineImage,
+    bleedImage,
     imageOffset,
     textSegments,
     repositionMode,
