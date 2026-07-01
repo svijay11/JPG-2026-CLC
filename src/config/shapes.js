@@ -121,6 +121,34 @@ export const SHAPES = [
     foilBorderImage: '/samples/foil-borders/baroque-oval.png',
     description: 'Silver Foil, 3″ × 3.7″',
     dieLines: { inner: false }
+  },
+
+  {
+    id: 'breast-cancer-ribbon',
+    name: 'Breast Cancer Awareness Ribbon',
+    viewBoxWidth: 76,
+    viewBoxHeight: 100,
+    svgElement: {
+      tag: 'path',
+      props: {
+        d: 'M 0,-42 C 14,-42 28,-34 30,-18 C 32,-2 18 8 8 18 C 0 28 -8 38 -18 46 C -10 36 0 26 8 16 C 16 6 28 -4 26,-18 C 24,-32 12,-42 0,-42 Z'
+      }
+    },
+    pathType: 'path2d',
+    path: 'M 0,-42 C 14,-42 28,-34 30,-18 C 32,-2 18 8 8 18 C 0 28 -8 38 -18 46 C -10 36 0 26 8 16 C 16 6 28 -4 26,-18 C 24,-32 12,-42 0,-42 Z',
+    sampleImage: '/samples/breast-cancer-ribbon.png',
+    dieLineImage: '/samples/breast-cancer-ribbon-dieline.png',
+    textOnly: true,
+    disableImageUpload: true,
+    maxTextLines: 1,
+    maxTextLength: 22,
+    defaultPathPosition: 42,
+    textPath: [
+      [-19.2, 32.0], [-17.3, 28.2], [-15.3, 24.4], [-13.3, 20.6], [-11.3, 16.8],
+      [-9.5, 13.0], [-7.8, 9.2], [-6.3, 5.4], [-5.1, 1.6]
+    ],
+    description: 'Awareness Ribbon — Text Only',
+    dieLines: { inner: false, strokeMode: 'magenta' }
   }
 ];
 
@@ -129,4 +157,18 @@ export function shapeHasFoilBorder(shapeOrId) {
     ? SHAPES.find((s) => s.id === shapeOrId)
     : shapeOrId;
   return Boolean(shape?.foilBorderImage);
+}
+
+export function shapeIsTextOnly(shapeOrId) {
+  const shape = typeof shapeOrId === 'string'
+    ? SHAPES.find((s) => s.id === shapeOrId)
+    : shapeOrId;
+  return Boolean(shape?.textOnly);
+}
+
+export function shapeAllowsImageUpload(shapeOrId) {
+  const shape = typeof shapeOrId === 'string'
+    ? SHAPES.find((s) => s.id === shapeOrId)
+    : shapeOrId;
+  return shape?.disableImageUpload !== true;
 }

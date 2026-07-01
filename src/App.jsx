@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import PreviewPanel from './components/PreviewPanel';
 import ControlPanel from './components/ControlPanel';
 import GalleryShapePreview from './components/GalleryShapePreview';
-import { SHAPES, shapeHasFoilBorder } from './config/shapes';
+import { SHAPES, shapeHasFoilBorder, shapeIsTextOnly, shapeAllowsImageUpload } from './config/shapes';
 import Toast from './components/Toast';
 import CartModal from './components/CartModal';
 import { useLabelCanvas } from './hooks/useLabelCanvas';
+import { DEFAULT_RIBBON_COLOR_ID } from './config/ribbonColors';
 import { calculateTotal } from './config/pricing';
 
 export default function App() {
@@ -14,7 +15,7 @@ export default function App() {
 
   // --- STATE LAYER ---
   const [selectedShape, setSelectedShape] = useState('circle');
-  const [selectedMaterial, setSelectedMaterial] = useState('digital-gold');
+  const [selectedMaterial, setSelectedMaterial] = useState('standard-4cp');
   
   // uploadedImage holds the HTMLImageElement for canvas drawing
   const [uploadedImage, setUploadedImage] = useState(null);
@@ -28,6 +29,7 @@ export default function App() {
   const [uvEnabled, setUvEnabled] = useState(false);
   const [hasTextOverflow, setHasTextOverflow] = useState(false);
   const [quantity, setQuantity] = useState(10);
+  const [ribbonColorId, setRibbonColorId] = useState(DEFAULT_RIBBON_COLOR_ID);
   const [toastMessage, setToastMessage] = useState(null);
 
   // --- CART STATE ---
@@ -40,6 +42,7 @@ export default function App() {
   // --- SAMPLE IMAGE PRELOADING (per shape) ---
   const [sampleImages, setSampleImages] = useState({});
   const [foilBorderImages, setFoilBorderImages] = useState({});
+  const [dieLineImages, setDieLineImages] = useState({});
   useEffect(() => {
     SHAPES.forEach((shape) => {
       if (shape.sampleImage) {
@@ -56,14 +59,39 @@ export default function App() {
           setFoilBorderImages((prev) => ({ ...prev, [shape.id]: foilImg }));
         };
       }
+      if (shape.dieLineImage) {
+        const dieImg = new Image();
+        dieImg.src = shape.dieLineImage;
+        dieImg.onload = () => {
+          setDieLineImages((prev) => ({ ...prev, [shape.id]: dieImg }));
+        };
+      }
     });
   }, []);
 
   const sampleImage = sampleImages[selectedShape] || null;
   const foilBorderImage = foilBorderImages[selectedShape] || null;
+  const dieLineImage = dieLineImages[selectedShape] || null;
 
   const openEditorForShape = (shapeId) => {
+    const shape = SHAPES.find((s) => s.id === shapeId);
     setSelectedShape(shapeId);
+    if (shape?.disableImageUpload) {
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
+      setUploadedImage(null);
+      setImageUrl(null);
+      setImageOffset({ x: 0, y: 0 });
+    }
+    if (shapeIsTextOnly(shape) && textSegments.length === 0) {
+      setTextSegments([{
+        id: String(Date.now()),
+        text: '',
+        fontSize: 12,
+        color: '#ffffff',
+        font: 'Josefin Sans',
+        pathPosition: shape.defaultPathPosition ?? 42
+      }]);
+    }
     setShowGallery(false);
   };
 
@@ -74,9 +102,11 @@ export default function App() {
     uploadedImage,
     sampleImage,
     foilBorderImage,
+    dieLineImage,
     imageOffset,
     textSegments,
     repositionMode,
+    ribbonColorId,
     uvEnabled,
     setHasTextOverflow
   });
@@ -112,12 +142,26 @@ export default function App() {
   };
 
   const handleSetTextSegmentOffset = (id, newOffset) => {
-    setTextSegments((prev) => prev.map(s => s.id === id ? { ...s, offset: { x: newOffset.x, y: newOffset.y } } : s));
+    setTextSegments((prev) => prev.map((segment) => {
+      if (segment.id !== id) return segment;
+      if (typeof newOffset.pathPosition === 'number') {
+        return { ...segment, pathPosition: newOffset.pathPosition };
+      }
+      return { ...segment, offset: { x: newOffset.x, y: newOffset.y } };
+    }));
   };
 
   const handleAddToCart = () => {
-    // 1. Validation: Image is REQUIRED to customize and order labels
-    if (!uploadedImage) {
+    const activeShape = SHAPES.find((s) => s.id === selectedShape);
+    const isTextOnly = shapeIsTextOnly(activeShape);
+
+    if (isTextOnly) {
+      const hasText = textSegments.some((segment) => segment.text && segment.text.trim().length > 0);
+      if (!hasText) {
+        setToastMessage('Please add your message on the ribbon before adding to cart.');
+        return;
+      }
+    } else if (!uploadedImage) {
       setToastMessage('Please upload an image to complete your customized label design.');
       return;
     }
@@ -129,7 +173,6 @@ export default function App() {
     }
 
     // 3. Compute price breakdown
-    const activeShape = SHAPES.find((s) => s.id === selectedShape);
     const hasFoilBorder = shapeHasFoilBorder(activeShape);
     const materialForPricing = hasFoilBorder ? selectedMaterial : null;
     const { unitPrice, total } = calculateTotal(materialForPricing, quantity, uvEnabled);
@@ -140,6 +183,7 @@ export default function App() {
       material: materialForPricing,
       textSegments,
       uvEnabled,
+      ribbonColorId: shapeIsTextOnly(activeShape) ? ribbonColorId : null,
       quantity,
       unitPrice,
       totalPrice: total,
@@ -155,6 +199,7 @@ export default function App() {
     setImageUrl(null);
     setImageOffset({ x: 0, y: 0 });
     setUvEnabled(false);
+    setRibbonColorId(DEFAULT_RIBBON_COLOR_ID);
     setQuantity(10);
 
     setToastMessage('Added design to cart successfully!');
@@ -247,6 +292,8 @@ export default function App() {
         onAddToCart={handleAddToCart}
         uvEnabled={uvEnabled}
         onUvToggle={handleUvToggle}
+        ribbonColorId={ribbonColorId}
+        onRibbonColorChange={setRibbonColorId}
       />
 
       {/* Slide-over Cart & Checkout Portal */}

@@ -23,6 +23,23 @@ function buildOpaqueGrid(imageData, width, height, threshold = 128) {
   return grid;
 }
 
+function buildMagentaStrokeGrid(imageData, width, height) {
+  const grid = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const r = imageData.data[i];
+      const g = imageData.data[i + 1];
+      const b = imageData.data[i + 2];
+      const a = imageData.data[i + 3];
+      if (a >= 128 && r > 140 && g < 130 && b > 90) {
+        grid[y * width + x] = 1;
+      }
+    }
+  }
+  return grid;
+}
+
 function erodeGrid(grid, width, height, radius) {
   if (radius <= 0) return grid.slice();
   const out = new Uint8Array(width * height);
@@ -165,19 +182,22 @@ export function getDieLineData(sampleImg, layout, options = {}) {
   const {
     innerInsetRatio = 0.034,
     drawInnerDieLine = true,
-    sampleSrc = sampleImg.src
+    sampleSrc = sampleImg.src,
+    strokeMode = null
   } = options;
 
   const innerInset = drawInnerDieLine
     ? Math.max(2, Math.round(Math.min(layout.w, layout.h) * innerInsetRatio))
     : 0;
-  const key = cacheKey(sampleSrc, layout.w, layout.h, innerInset);
+  const key = cacheKey(`${sampleSrc}|${strokeMode || 'alpha'}`, layout.w, layout.h, innerInset);
   if (dieLineCache.has(key)) return dieLineCache.get(key);
 
   const imageData = getSampleAlphaData(sampleImg, layout);
   const width = imageData.width;
   const height = imageData.height;
-  const opaque = buildOpaqueGrid(imageData, width, height);
+  const opaque = strokeMode === 'magenta'
+    ? buildMagentaStrokeGrid(imageData, width, height)
+    : buildOpaqueGrid(imageData, width, height);
 
   const outerPoints = simplifyPoints(orderEdgePoints(extractEdgePoints(opaque, width, height)), 2);
   const outerPath = pointsToPath(outerPoints, layout.x, layout.y);
@@ -381,10 +401,15 @@ function foilBorderHasRenderableArtwork(imageData) {
   return false;
 }
 
-import { MATERIALS } from '../config/pricing';
+import { MATERIALS, STANDARD_4CP_MATERIAL_ID, isStandard4cpMaterial } from '../config/pricing';
 
 export function drawFoilBorderWithMaterial(ctx, foilBorderImg, layout, materialId) {
-  const material = MATERIALS.find((m) => m.id === materialId) || MATERIALS[0];
+  if (isStandard4cpMaterial(materialId)) {
+    ctx.drawImage(foilBorderImg, layout.x, layout.y, layout.w, layout.h);
+    return;
+  }
+
+  const material = MATERIALS.find((m) => m.id === materialId) || MATERIALS[1];
   const w = Math.max(1, Math.round(layout.w));
   const h = Math.max(1, Math.round(layout.h));
 

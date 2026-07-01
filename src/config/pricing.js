@@ -1,4 +1,23 @@
+export const STANDARD_4CP_MATERIAL_ID = 'standard-4cp';
+export const FULL_BLEED_MATERIAL_ID = 'full-bleed';
+
 export const MATERIALS = [
+  {
+    id: STANDARD_4CP_MATERIAL_ID,
+    name: 'Standard 4CP — Original Border',
+    price: 0,
+    overlayType: 'none',
+    color: '#c9a84c',
+    description: 'Full-color print with the template\'s original border artwork — no foil or digital upgrade'
+  },
+  {
+    id: FULL_BLEED_MATERIAL_ID,
+    name: 'No Border — Full Bleed to Die Line',
+    price: 0,
+    overlayType: 'full-bleed',
+    color: '#ffffff',
+    description: 'Remove the decorative border — your photo fills the entire label to the die line'
+  },
   {
     id: 'digital-gold',
     name: 'Digital — Gold',
@@ -59,12 +78,20 @@ export const MATERIALS = [
   }
 ];
 
+export function isStandard4cpMaterial(materialId) {
+  return !materialId || materialId === STANDARD_4CP_MATERIAL_ID;
+}
+
+export function isFullBleedMaterial(materialId) {
+  return materialId === FULL_BLEED_MATERIAL_ID;
+}
+
 export const STATIC_QUANTITY = 10;
 
 export const calculateTotal = (materialId, quantity = STATIC_QUANTITY, uvEnabled = false) => {
   const material = materialId ? MATERIALS.find((m) => m.id === materialId) : null;
   const basePrice = 1.00;
-  const materialAddon = material ? material.price : 0;
+  const materialAddon = material && material.id !== STANDARD_4CP_MATERIAL_ID ? material.price : 0;
   const uvAddon = uvEnabled ? 1.00 : 0;
   const unitPrice = basePrice + materialAddon + uvAddon;
   return {

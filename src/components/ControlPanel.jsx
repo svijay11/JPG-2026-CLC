@@ -1,9 +1,11 @@
 import React from 'react';
-import { SHAPES, shapeHasFoilBorder } from '../config/shapes';
+import { SHAPES, shapeHasFoilBorder, shapeIsTextOnly, shapeAllowsImageUpload } from '../config/shapes';
 import MaterialSelector from './MaterialSelector';
 import ImageUploader from './ImageUploader';
 import TextControls from './TextControls';
-import { calculateTotal, STATIC_QUANTITY } from '../config/pricing';
+import { calculateTotal, STATIC_QUANTITY, isStandard4cpMaterial, isFullBleedMaterial } from '../config/pricing';
+import RibbonColorSelector from './RibbonColorSelector';
+import { getRibbonColor } from '../config/ribbonColors';
 
 export default function ControlPanel({
   selectedShape,
@@ -28,7 +30,9 @@ export default function ControlPanel({
   onQuantityChange,
   onAddToCart,
   uvEnabled,
-  onUvToggle
+  onUvToggle,
+  ribbonColorId,
+  onRibbonColorChange
 }) {
   const toggleImageReposition = () => {
     if (repositionMode === 'image') {
@@ -40,6 +44,8 @@ export default function ControlPanel({
   // Calculate total pricing based on selected material and quantity
   const activeShape = SHAPES.find((s) => s.id === selectedShape) || SHAPES[0];
   const hasFoilBorder = shapeHasFoilBorder(activeShape);
+  const isTextOnly = shapeIsTextOnly(activeShape);
+  const allowsImageUpload = shapeAllowsImageUpload(activeShape);
   const materialForPricing = hasFoilBorder ? selectedMaterial : null;
   const { unitPrice, total } = calculateTotal(materialForPricing, quantity, uvEnabled);
 
@@ -64,9 +70,18 @@ export default function ControlPanel({
         {/* Section 1: Selected Template */}
         <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
           <div className="flex items-center">
-            <div className="w-20 h-14 flex items-center justify-center bg-gray-50 rounded border border-gray-100">
+            <div className="w-20 h-14 flex items-center justify-center bg-gray-50 rounded border border-gray-100 overflow-hidden">
               {(() => {
                 const s = SHAPES.find((sh) => sh.id === selectedShape) || SHAPES[0];
+                if (s.sampleImage) {
+                  return (
+                    <img
+                      src={s.sampleImage}
+                      alt={`${s.name} preview`}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  );
+                }
                 const Tag = s.svgElement.tag;
                 return (
                   <svg viewBox="-50 -50 100 100" className="w-full h-full text-luxury-charcoal">
@@ -90,22 +105,41 @@ export default function ControlPanel({
           <summary className="px-4 py-3 cursor-pointer text-sm font-semibold text-pink-600 text-center">Select Options</summary>
           <div className="p-4 space-y-4">
             {/* Keep existing sections inside the dropdown */}
-            <MaterialSelector
-              selectedMaterial={selectedMaterial}
-              onSelectMaterial={onSelectMaterial}
-              disabled={repositionMode !== 'none'}
-              hasFoilBorder={hasFoilBorder}
-            />
+            {!isTextOnly && (
+              <MaterialSelector
+                selectedMaterial={selectedMaterial}
+                onSelectMaterial={onSelectMaterial}
+                disabled={repositionMode !== 'none'}
+                hasFoilBorder={hasFoilBorder}
+              />
+            )}
 
-            <ImageUploader
-              uploadedImage={uploadedImage}
-              imageUrl={imageUrl}
-              onImageUploaded={onImageUploaded}
-              onImageRemoved={onImageRemoved}
-              isRepositioning={repositionMode === 'image'}
-              onToggleReposition={() => onRepositionModeChange(repositionMode === 'image' ? 'none' : 'image')}
-              disabled={repositionMode === 'text'}
-            />
+            {isTextOnly && (
+              <RibbonColorSelector
+                selectedColorId={ribbonColorId}
+                onSelectColor={onRibbonColorChange}
+                disabled={repositionMode !== 'none'}
+              />
+            )}
+
+            {allowsImageUpload ? (
+              <ImageUploader
+                uploadedImage={uploadedImage}
+                imageUrl={imageUrl}
+                onImageUploaded={onImageUploaded}
+                onImageRemoved={onImageRemoved}
+                isRepositioning={repositionMode === 'image'}
+                onToggleReposition={() => onRepositionModeChange(repositionMode === 'image' ? 'none' : 'image')}
+                disabled={repositionMode === 'text'}
+              />
+            ) : (
+              <div className="p-4 bg-pink-50 border border-pink-100 rounded-lg space-y-1">
+                <p className="text-sm font-semibold text-pink-700">Ribbon artwork</p>
+                <p className="text-xs text-pink-600/80 leading-relaxed">
+                  Pick a ribbon color above, then add your message below — it prints in one line along the left ribbon strand.
+                </p>
+              </div>
+            )}
 
             <TextControls
               textSegments={textSegments}
@@ -116,8 +150,13 @@ export default function ControlPanel({
               onRepositionModeChange={onRepositionModeChange}
               hasTextOverflow={hasTextOverflow}
               disabled={repositionMode === 'image'}
+              textOnly={isTextOnly}
+              maxTextLines={activeShape.maxTextLines || 6}
+              maxTextLength={activeShape.maxTextLength ?? null}
+              defaultPathPosition={activeShape.defaultPathPosition ?? 42}
             />
 
+            {!isTextOnly && (
             <div className={`space-y-3 ${repositionMode !== 'none' ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
               <label className="flex items-center space-x-3 cursor-pointer">
                 <input
@@ -133,36 +172,8 @@ export default function ControlPanel({
                 </div>
               </label>
             </div>
+            )}
 
-            <div className="space-y-2">
-              <div className="flex items-center space-x-3">
-                <button
-                  type="button"
-                  onClick={() => onQuantityChange(Math.max(1, quantity - 1))}
-                  disabled={repositionMode !== 'none'}
-                  className="w-10 h-10 border border-gray-200 rounded-lg flex items-center justify-center font-bold bg-white"
-                >
-                  -
-                </button>
-                <input
-                  type="number"
-                  min={1}
-                  value={quantity}
-                  onChange={(e) => onQuantityChange(Math.max(1, parseInt(e.target.value) || 1))}
-                  disabled={repositionMode !== 'none'}
-                  className="w-20 h-10 border border-gray-200 rounded-lg text-center"
-                />
-                <button
-                  type="button"
-                  onClick={() => onQuantityChange(quantity + 1)}
-                  disabled={repositionMode !== 'none'}
-                  className="w-10 h-10 border border-gray-200 rounded-lg flex items-center justify-center font-bold bg-white"
-                >
-                  +
-                </button>
-                <span className="text-sm text-gray-500">labels</span>
-              </div>
-            </div>
           </div>
         </details>
 
@@ -219,9 +230,15 @@ export default function ControlPanel({
           <div className="space-y-1.5 text-xs">
           <div className="flex justify-between text-gray-500 font-medium">
             <span>
-              {hasFoilBorder
-                ? `Border: ${selectedMaterial.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}`
-                : 'Print: Standard 4CP'}
+              {isTextOnly
+                ? `Print: ${getRibbonColor(ribbonColorId).name} Ribbon (4CP)`
+                : isFullBleedMaterial(selectedMaterial)
+                  ? 'Print: Full Bleed — No Border (4CP)'
+                  : hasFoilBorder
+                  ? (isStandard4cpMaterial(selectedMaterial)
+                    ? 'Border: Standard 4CP (Original)'
+                    : `Border: ${selectedMaterial.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}`)
+                  : 'Print: Standard 4CP'}
             </span>
             <span>${unitPrice.toFixed(2)} / unit</span>
           </div>

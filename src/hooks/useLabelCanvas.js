@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { SHAPES, shapeHasFoilBorder } from '../config/shapes';
+import { SHAPES, shapeHasFoilBorder, shapeIsTextOnly } from '../config/shapes';
 import {
   computeSampleLabelLayout,
   drawDieLines,
@@ -8,6 +8,10 @@ import {
   getDieLineData,
   getFoilBorderClipData
 } from '../utils/labelDieLines';
+import { drawTextAlongPath, mapShapePathToCanvas } from '../utils/curvedText';
+import { drawTintedRibbon } from '../utils/ribbonTint';
+import { getRibbonColor } from '../config/ribbonColors';
+import { isFullBleedMaterial } from '../config/pricing';
 
 export const useLabelCanvas = (canvasRef, {
   selectedShape,
@@ -15,9 +19,11 @@ export const useLabelCanvas = (canvasRef, {
   uploadedImage,
   sampleImage,
   foilBorderImage,
+  dieLineImage,
   imageOffset,
   textSegments,
   repositionMode,
+  ribbonColorId,
   uvEnabled,
   setHasTextOverflow
 }) => {
@@ -127,21 +133,32 @@ export const useLabelCanvas = (canvasRef, {
     const activeImg = uploadedImage || sampleImage;
     const isSample = !uploadedImage && sampleImage;
     const isSampleLabel = isSample && !shape.clipSampleToShape;
+    const isTextOnlyShape = shapeIsTextOnly(shape);
     const usesSampleDieLines = Boolean(uploadedImage && sampleImage);
     const hasFoilBorder = shapeHasFoilBorder(shape) && Boolean(foilBorderImage);
+    const fullBleed = isFullBleedMaterial(selectedMaterial);
+    const showFoilBorder = hasFoilBorder && !fullBleed;
 
     let labelLayout = sampleImage ? computeSampleLabelLayout(sampleImage, maxTargetSize) : null;
     let dieData = null;
     let foilClipData = null;
-    if (usesSampleDieLines && labelLayout) {
-      dieData = getDieLineData(sampleImage, labelLayout, {
-        drawInnerDieLine: shape.dieLines?.inner !== false,
-        innerInsetRatio: shape.dieLines?.innerInsetRatio ?? 0.034,
-        sampleSrc: shape.sampleImage
-      });
-      if (hasFoilBorder) {
-        foilClipData = getFoilBorderClipData(foilBorderImage, labelLayout, dieData, {
-          foilSrc: shape.foilBorderImage
+    if (labelLayout) {
+      if (usesSampleDieLines) {
+        dieData = getDieLineData(sampleImage, labelLayout, {
+          drawInnerDieLine: shape.dieLines?.inner !== false,
+          innerInsetRatio: shape.dieLines?.innerInsetRatio ?? 0.034,
+          sampleSrc: shape.sampleImage
+        });
+        if (hasFoilBorder && !fullBleed) {
+          foilClipData = getFoilBorderClipData(foilBorderImage, labelLayout, dieData, {
+            foilSrc: shape.foilBorderImage
+          });
+        }
+      } else if (shape.dieLineImage && dieLineImage) {
+        dieData = getDieLineData(dieLineImage, labelLayout, {
+          drawInnerDieLine: false,
+          sampleSrc: shape.dieLineImage,
+          strokeMode: shape.dieLines?.strokeMode || null
         });
       }
     }
@@ -234,14 +251,21 @@ export const useLabelCanvas = (canvasRef, {
 
     // Layer 2: Image
     if (activeImg && imgDraw) {
-      if (usesSampleDieLines && (foilClipData || dieData) && !(repositionMode === 'image')) {
+      if (usesSampleDieLines && dieData && !(repositionMode === 'image')) {
         ctx.save();
-        const clipMask = foilClipData?.photoClipMask || dieData.maskCanvas;
+        const clipMask = fullBleed
+          ? dieData.maskCanvas
+          : (foilClipData?.photoClipMask || dieData.maskCanvas);
         drawImageWithSampleMask(ctx, activeImg, clipMask, labelLayout, imgDraw);
         ctx.restore();
       } else if (isSampleLabel || (repositionMode === 'image' && uploadedImage)) {
         ctx.save();
-        ctx.drawImage(activeImg, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h);
+        if (isTextOnlyShape) {
+          const ribbonColor = getRibbonColor(ribbonColorId);
+          drawTintedRibbon(ctx, activeImg, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h, ribbonColor.color, ribbonColor.id);
+        } else {
+          ctx.drawImage(activeImg, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h);
+        }
         ctx.restore();
       } else {
         ctx.save();
@@ -274,7 +298,7 @@ export const useLabelCanvas = (canvasRef, {
     }
 
     // Layer 2b: Foil border with selected material finish (border only, not the photo area)
-    if (hasFoilBorder && labelLayout && !(repositionMode === 'image')) {
+    if (showFoilBorder && labelLayout && !(repositionMode === 'image')) {
       ctx.save();
       drawFoilBorderWithMaterial(ctx, foilBorderImage, labelLayout, selectedMaterial);
       ctx.restore();
@@ -299,9 +323,9 @@ export const useLabelCanvas = (canvasRef, {
   }
 
     // Layer 4: Die lines / shape outline
-    if (usesSampleDieLines && dieData) {
+    if (dieData && (usesSampleDieLines || shape.dieLineImage)) {
       drawDieLines(ctx, dieData, {
-        strokeOuter: '#c9a84c',
+        strokeOuter: shape.dieLines?.strokeMode === 'magenta' ? '#d946a8' : '#c9a84c',
         strokeInner: 'rgba(255,255,255,0.65)',
         lineWidth: 1.5
       });
@@ -321,12 +345,24 @@ export const useLabelCanvas = (canvasRef, {
     
     if (activeSegments.length > 0) {
       ctx.save();
-      // Drop shadow for legibility over white/images
       ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
       ctx.shadowBlur = 4;
       ctx.shadowOffsetX = 1;
       ctx.shadowOffsetY = 1;
 
+      if (isTextOnlyShape && shape.textPath?.length && labelLayout) {
+        const canvasPath = mapShapePathToCanvas(shape.textPath, labelLayout);
+        activeSegments.forEach((segment) => {
+          const pathPosition = segment.pathPosition ?? shape.defaultPathPosition ?? 50;
+          const result = drawTextAlongPath(ctx, segment.text.toUpperCase(), canvasPath, {
+            fontSize: segment.fontSize,
+            font: segment.font || 'Josefin Sans',
+            color: segment.color || '#ffffff',
+            pathPosition
+          });
+          if (result?.overflows) overflowDetected = true;
+        });
+      } else {
       // Centered in lower third by default; move up for narrow crest shapes
       let baseTextCenterY = overlayRect.y + overlayRect.height * 0.75;
       if (shape && shape.id === 'template_page_10_crest_wave') {
@@ -395,13 +431,14 @@ export const useLabelCanvas = (canvasRef, {
       });
 
       // Draw dashed outline if text is selected for repositioning
-      if (repositionMode === 'text') {
+      if (repositionMode === 'text' && !isTextOnlyShape) {
         ctx.restore(); // restore shadow settings so box isn't shadowed
         ctx.save();
         ctx.strokeStyle = '#c9a84c'; // Gold cut line / border for active editing
         ctx.lineWidth = 1.5;
         ctx.setLineDash([4, 4]);
         ctx.strokeRect(minX - 8, minY - 8, (maxX - minX) + 16, (maxY - minY) + 16);
+      }
       }
 
       ctx.restore();
@@ -422,15 +459,16 @@ export const useLabelCanvas = (canvasRef, {
     if ((repositionMode === 'image' && uploadedImage && imgDraw) || repositionMode === 'text') {
       ctx.save();
 
-      // Draw dark overlay across whole canvas
       ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
       ctx.fillRect(0, 0, logicalSize, logicalSize);
 
       // Punch out the label area so interior remains visible
       ctx.save();
       ctx.globalCompositeOperation = 'destination-out';
-      if (usesSampleDieLines && dieData?.outerPath) {
+      if (dieData?.outerPath) {
         ctx.fill(dieData.outerPath);
+      } else if (labelLayout) {
+        ctx.fillRect(labelLayout.x, labelLayout.y, labelLayout.w, labelLayout.h);
       } else {
         applyShapeTransform(ctx);
         const hole = defineShapePath();
@@ -474,9 +512,11 @@ export const useLabelCanvas = (canvasRef, {
     uploadedImage,
     sampleImage,
     foilBorderImage,
+    dieLineImage,
     imageOffset,
     textSegments,
     repositionMode,
+    ribbonColorId,
     uvEnabled,
     fontsLoaded,
     setHasTextOverflow
