@@ -7,8 +7,7 @@ export default function CartModal({
   onClose,
   cartItems,
   onRemoveItem,
-  onClearCart,
-  setToastMessage
+  onCompleteOrder
 }) {
   const [paymentMethod, setPaymentMethod] = useState('card');
   
@@ -30,27 +29,14 @@ export default function CartModal({
       return;
     }
 
-    if (paymentMethod === 'card') {
-      if (!cardName || !cardNumber || !cardExpiry || !cardCvv) {
-        alert('Please fill out all card fields.');
-        return;
-      }
-    }
-
-    // Backend endpoint placeholder logic:
-    // Future integration note:
-    // fetch('/api/checkout', {
-    //   method: 'POST',
-    //   body: JSON.stringify({ items: cartItems, paymentMethod, cardDetails: { name: cardName, number: cardNumber } })
-    // }).then(...)
-
-    alert(`Order Simulating Success! Payment processed via ${
-      paymentMethod === 'card' ? 'Credit Card' : paymentMethod === 'apple' ? 'Apple Pay' : 'Google Pay'
-    }. Thank you for ordering from Idyll Time Wines!`);
-    
-    onClearCart();
-    onClose();
-    setToastMessage('Order placed successfully! We will contact you soon.');
+    // FOR NOW: bypass payment and go straight to PDF download
+    onCompleteOrder(cartItems, {
+      paymentMethod,
+      buyerName: cardName.trim() || 'Customer',
+      orderDate: new Date().toISOString(),
+      orderId: `#${Date.now().toString().slice(-10)}`,
+      buyerId: Math.random().toString(36).slice(2, 19)
+    });
   };
 
   return (
@@ -140,9 +126,9 @@ export default function CartModal({
                         <p className="text-[10px] text-gray-500 mt-1 capitalize">
                           {shapeName} • {materialName.replace('-', ' ')}
                         </p>
-                        {item.labelText && (
+                        {item.textSegments?.length > 0 && (
                           <p className="text-[10px] text-gray-400 italic truncate mt-0.5">
-                            &ldquo;{item.labelText}&rdquo;
+                            &ldquo;{item.textSegments.map((s) => s.text).filter(Boolean).join(' · ')}&rdquo;
                           </p>
                         )}
                         <div className="flex justify-between items-baseline mt-2">

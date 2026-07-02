@@ -7,7 +7,9 @@ import {
   drawImageWithSampleMask,
   getBleedDieLineData,
   getDieLineData,
-  getFoilBorderClipData
+  getFoilBorderClipData,
+  DIE_LINE_COLORS,
+  drawBleedGuideLine
 } from '../utils/labelDieLines';
 import { drawTextAlongPath, mapShapePathToCanvas } from '../utils/curvedText';
 import { drawTintedRibbon } from '../utils/ribbonTint';
@@ -141,8 +143,9 @@ export const useLabelCanvas = (canvasRef, {
     const hasFoilBorder = shapeHasFoilBorder(shape) && Boolean(foilBorderImage);
     const fullBleed = isFullBleedMaterial(selectedMaterial);
     const showFoilBorder = hasFoilBorder && !fullBleed;
-    // Bleed zone is only shown in preview when there's no foil frame, or customer chose full bleed.
-    const showVisualBleed = usesBleedDieLines && Boolean(uploadedImage) && (!hasFoilBorder || fullBleed);
+    // Photo + cyan bleed guide always use bleed assets when available; foil frame draws on top.
+    const useBleedPhoto = usesBleedDieLines && Boolean(uploadedImage);
+    const showBleedGuide = useBleedPhoto;
 
     let labelLayout = sampleImage ? computeSampleLabelLayout(sampleImage, maxTargetSize) : null;
     let trimLayout = labelLayout;
@@ -189,9 +192,9 @@ export const useLabelCanvas = (canvasRef, {
       let drawW, drawH;
 
       if (isSampleLabel || usesSampleDieLines || usesBleedDieLines) {
-        const bounds = showVisualBleed ? bleedLayoutRef : labelLayout;
+        const bounds = useBleedPhoto ? bleedLayoutRef : labelLayout;
         const boundsRatio = bounds.w / bounds.h;
-        const coverFit = showVisualBleed;
+        const coverFit = useBleedPhoto;
         if (coverFit) {
           if (imgRatio > boundsRatio) {
             drawH = bounds.h;
@@ -233,7 +236,7 @@ export const useLabelCanvas = (canvasRef, {
       let finalY;
 
       if (isSampleLabel || usesSampleDieLines || usesBleedDieLines) {
-        const bounds = showVisualBleed ? bleedLayoutRef : labelLayout;
+        const bounds = useBleedPhoto ? bleedLayoutRef : labelLayout;
         finalX = bounds.x + (bounds.w - drawW) / 2;
         finalY = bounds.y + (bounds.h - drawH) / 2;
       } else {
@@ -283,10 +286,10 @@ export const useLabelCanvas = (canvasRef, {
     if (activeImg && imgDraw) {
       if ((usesSampleDieLines || usesBleedDieLines) && dieData && uploadedImage && !(repositionMode === 'image')) {
         ctx.save();
-        const clipMask = showVisualBleed
+        const clipMask = useBleedPhoto
           ? (dieData.bleedMaskCanvas || dieData.maskCanvas)
           : (foilClipData?.photoClipMask || dieData.maskCanvas);
-        const clipLayout = showVisualBleed && dieData.hasBleed ? dieData.bleedLayout : labelLayout;
+        const clipLayout = useBleedPhoto && dieData.hasBleed ? dieData.bleedLayout : labelLayout;
         drawImageWithSampleMask(ctx, activeImg, clipMask, clipLayout, imgDraw);
         ctx.restore();
       } else if (isSampleLabel || (repositionMode === 'image' && uploadedImage)) {
@@ -353,14 +356,19 @@ export const useLabelCanvas = (canvasRef, {
     ctx.restore();
   }
 
-    // Layer 4: Die lines / shape outline
+    // Layer 4: Die lines — trim (red) then bleed (cyan), on top of foil
     if (dieData && (usesSampleDieLines || shape.dieLineImage || dieData.hasBleed)) {
       drawDieLines(ctx, dieData, {
-        strokeOuter: shape.dieLines?.strokeMode === 'magenta' ? '#d946a8' : '#c9a84c',
+        strokeTrim: DIE_LINE_COLORS.trim,
+        strokeBleed: DIE_LINE_COLORS.bleed,
         strokeInner: 'rgba(255,255,255,0.65)',
         lineWidth: 1.5,
-        showBleedLine: showVisualBleed
+        showBleedLine: false,
+        showTrimLine: Boolean(uploadedImage || shape.dieLineImage)
       });
+      if (showBleedGuide) {
+        drawBleedGuideLine(ctx, dieData, 2);
+      }
     } else if (!isSampleLabel) {
       ctx.save();
       applyShapeTransform(ctx);
@@ -515,9 +523,10 @@ export const useLabelCanvas = (canvasRef, {
       if ((usesSampleDieLines || dieData?.hasBleed) && dieData) {
         ctx.setLineDash([4, 4]);
         drawDieLines(ctx, dieData, {
-          strokeOuter: '#c9a84c',
-          strokeInner: '#c9a84c',
-          lineWidth: 2
+          strokeTrim: DIE_LINE_COLORS.trim,
+          strokeBleed: DIE_LINE_COLORS.bleed,
+          lineWidth: 2,
+          showBleedLine: showBleedGuide
         });
       } else {
         applyShapeTransform(ctx);

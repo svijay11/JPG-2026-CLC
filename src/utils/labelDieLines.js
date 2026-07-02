@@ -175,6 +175,45 @@ export function getSampleAlphaData(sampleImg, layout) {
   return ctx.getImageData(0, 0, off.width, off.height);
 }
 
+function buildOuterContourGrid(strokeGrid, width, height) {
+  const out = new Uint8Array(width * height);
+  const cx = (width - 1) / 2;
+  const cy = (height - 1) / 2;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      if (!strokeGrid[idx]) continue;
+
+      const dist = Math.hypot(x - cx, y - cy);
+      let isOuter = false;
+
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) {
+            isOuter = true;
+            break;
+          }
+          if (!strokeGrid[ny * width + nx]) {
+            const ndist = Math.hypot(nx - cx, ny - cy);
+            if (ndist >= dist - 0.25) {
+              isOuter = true;
+              break;
+            }
+          }
+        }
+        if (isOuter) break;
+      }
+
+      if (isOuter) out[idx] = 1;
+    }
+  }
+  return out;
+}
+
 function drawEdgeContour(ctx, grid, width, height, offsetX, offsetY, strokeStyle, lineWidth = 1.5) {
   ctx.save();
   ctx.fillStyle = strokeStyle;
@@ -314,21 +353,23 @@ function computeBleedLayout(trimLayout, bleedImg, trimDieImg) {
 export function getBleedDieLineData(bleedImg, trimDieImg, maxTargetSize = 420) {
   const trimLayout = computeSampleLabelLayout(trimDieImg, maxTargetSize);
   const bleedLayout = computeBleedLayout(trimLayout, bleedImg, trimDieImg);
-  const key = cacheKey(`bleed|${bleedImg.src}|${trimDieImg.src}`, bleedLayout.w, bleedLayout.h, 0);
+  const key = cacheKey(`bleed|v3|${bleedImg.src}|${trimDieImg.src}`, bleedLayout.w, bleedLayout.h, 0);
   if (dieLineCache.has(key)) return dieLineCache.get(key);
 
   const bleedImageData = getSampleAlphaData(bleedImg, bleedLayout);
   const bw = bleedImageData.width;
   const bh = bleedImageData.height;
   const bleedStroke = buildCyanStrokeGrid(bleedImageData, bw, bh);
+  const bleedOuterGrid = buildOuterContourGrid(bleedStroke, bw, bh);
   const bleedMaskCanvas = bleedInteriorMaskFromStrokeGrid(bleedStroke, bw, bh);
 
   const trimImageData = getSampleAlphaData(trimDieImg, trimLayout);
   const tw = trimImageData.width;
   const th = trimImageData.height;
   const trimStroke = buildMagentaStrokeGrid(trimImageData, tw, th);
+  const trimOuterGrid = buildOuterContourGrid(trimStroke, tw, th);
   const trimMaskCanvas = interiorMaskFromStrokeGrid(trimStroke, tw, th);
-  const trimPoints = simplifyPoints(orderEdgePoints(extractEdgePoints(trimStroke, tw, th)), 2);
+  const trimPoints = simplifyPoints(orderEdgePoints(extractEdgePoints(trimOuterGrid, tw, th)), 2);
   const outerPath = pointsToPath(trimPoints, trimLayout.x, trimLayout.y);
 
   const data = {
@@ -338,7 +379,9 @@ export function getBleedDieLineData(bleedImg, trimDieImg, maxTargetSize = 420) {
     bleedMaskCanvas,
     maskCanvas: trimMaskCanvas,
     bleedStrokeGrid: bleedStroke,
+    bleedOuterGrid,
     outerGrid: trimStroke,
+    trimOuterGrid,
     outerPath,
     innerGrid: null,
     layout: bleedLayout,
@@ -369,33 +412,72 @@ export function drawImageWithSampleMask(ctx, userImg, maskCanvas, layout, imgDra
   ctx.drawImage(off, layout.x, layout.y, layout.w, layout.h);
 }
 
-export function drawDieLines(ctx, dieData, { strokeOuter = '#c9a84c', strokeInner = 'rgba(255,255,255,0.55)', lineWidth = 1.5, showBleedLine = true } = {}) {
-  if (!dieData) return;
+export const DIE_LINE_COLORS = {
+  bleed: '#22d3ee',
+  trim: '#ef4444'
+};
 
-  if (dieData.hasBleed && showBleedLine && dieData.bleedStrokeGrid && dieData.bleedLayout && dieData.bleedGridSize) {
-    drawEdgeContour(
-      ctx,
-      dieData.bleedStrokeGrid,
-      dieData.bleedGridSize.width,
-      dieData.bleedGridSize.height,
-      dieData.bleedLayout.x,
-      dieData.bleedLayout.y,
-      'rgba(34, 211, 238, 0.55)',
-      1
-    );
-  }
+export function drawBleedGuideLine(ctx, dieData, lineWidth = 2) {
+  if (!dieData?.hasBleed || !dieData.bleedOuterGrid || !dieData.bleedLayout || !dieData.bleedGridSize) return;
+  drawEdgeContour(
+    ctx,
+    dieData.bleedOuterGrid,
+    dieData.bleedGridSize.width,
+    dieData.bleedGridSize.height,
+    dieData.bleedLayout.x,
+    dieData.bleedLayout.y,
+    DIE_LINE_COLORS.bleed,
+    lineWidth
+  );
+}
+
+export function drawDieLines(ctx, dieData, {
+  strokeTrim = DIE_LINE_COLORS.trim,
+  strokeBleed = DIE_LINE_COLORS.bleed,
+  strokeInner = 'rgba(255,255,255,0.55)',
+  lineWidth = 1.5,
+  showBleedLine = true,
+  showTrimLine = true
+} = {}) {
+  if (!dieData) return;
 
   const trimLayout = dieData.trimLayout || dieData.layout;
   const { gridSize } = dieData;
 
-  if (dieData.outerGrid && gridSize) {
-    drawEdgeContour(ctx, dieData.outerGrid, gridSize.width, gridSize.height, trimLayout.x, trimLayout.y, strokeOuter, lineWidth);
-  } else if (dieData.outerPath) {
-    ctx.save();
-    ctx.strokeStyle = strokeOuter;
-    ctx.lineWidth = lineWidth;
-    ctx.stroke(dieData.outerPath);
-    ctx.restore();
+  if (showTrimLine) {
+    if (dieData.trimOuterGrid && gridSize) {
+      drawEdgeContour(
+        ctx,
+        dieData.trimOuterGrid,
+        gridSize.width,
+        gridSize.height,
+        trimLayout.x,
+        trimLayout.y,
+        strokeTrim,
+        lineWidth
+      );
+    } else if (dieData.outerGrid && gridSize) {
+      drawEdgeContour(ctx, dieData.outerGrid, gridSize.width, gridSize.height, trimLayout.x, trimLayout.y, strokeTrim, lineWidth);
+    } else if (dieData.outerPath) {
+      ctx.save();
+      ctx.strokeStyle = strokeTrim;
+      ctx.lineWidth = lineWidth;
+      ctx.stroke(dieData.outerPath);
+      ctx.restore();
+    }
+  }
+
+  if (dieData.hasBleed && showBleedLine && dieData.bleedOuterGrid && dieData.bleedLayout && dieData.bleedGridSize) {
+    drawEdgeContour(
+      ctx,
+      dieData.bleedOuterGrid,
+      dieData.bleedGridSize.width,
+      dieData.bleedGridSize.height,
+      dieData.bleedLayout.x,
+      dieData.bleedLayout.y,
+      strokeBleed,
+      1.5
+    );
   }
 
   if (dieData.innerGrid) {

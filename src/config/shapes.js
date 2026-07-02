@@ -30,7 +30,7 @@ export const SHAPES = [
     foilBorderImage: '/samples/foil-borders/tall-label.png',
     bleedImage: '/samples/tall-label-bleed.png',
     dieLineImage: '/samples/tall-label-dieline.png',
-    description: '4CP, 2.5″ × 3.9″',
+    description: '4CP, 2.5″×3.9″',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
   {
@@ -47,7 +47,7 @@ export const SHAPES = [
     sampleImage: '/samples/squircle.png',
     bleedImage: '/samples/squircle-bleed.png',
     dieLineImage: '/samples/squircle-dieline.png',
-    description: '4CP, 3.25″ × 2.75″',
+    description: '4CP, 3.25″×2.75″',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
 
@@ -55,7 +55,7 @@ export const SHAPES = [
 
   {
     id: 'template_page_14_stepped_badge',
-    name: 'Stepped Circle Badge / Bracket Label',
+    name: 'Bracket Label',
     viewBoxWidth: 100,
     viewBoxHeight: 100,
     svgElement: {
@@ -70,13 +70,13 @@ export const SHAPES = [
     foilBorderImage: '/samples/foil-borders/stepped-badge.png',
     bleedImage: '/samples/stepped-badge-bleed.png',
     dieLineImage: '/samples/stepped-badge-dieline.png',
-    description: 'Digital Gold, 4.06″ × 4.01″',
+    description: 'Digital Gold, 4.06″×4.01″',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
 
   {
     id: 'template_page_12_tapered_shield',
-    name: 'Tapered Shield / Trophy Flagon',
+    name: 'Trophy Flagon',
     viewBoxWidth: 100,
     viewBoxHeight: 100,
     svgElement: {
@@ -91,7 +91,7 @@ export const SHAPES = [
     foilBorderImage: '/samples/foil-borders/tapered-shield.png',
     bleedImage: '/samples/tapered-shield-bleed.png',
     dieLineImage: '/samples/tapered-shield-dieline.png',
-    description: 'Digital Gold, 3.36″ × 4.13″',
+    description: 'Digital Gold, 3.36″×4.13″',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
 
@@ -112,7 +112,7 @@ export const SHAPES = [
     foilBorderImage: '/samples/foil-borders/crest-wave.png',
     bleedImage: '/samples/crest-wave-bleed.png',
     dieLineImage: '/samples/crest-wave-dieline.png',
-    description: 'Gold Foil, 3.66″ × 3.82″',
+    description: 'Gold Foil, 3.66″×3.82″',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
 
@@ -133,7 +133,7 @@ export const SHAPES = [
     foilBorderImage: '/samples/foil-borders/baroque-oval.png',
     bleedImage: '/samples/baroque-oval-bleed.png',
     dieLineImage: '/samples/baroque-oval-dieline.png',
-    description: 'Silver Foil, 3″ × 3.7″',
+    description: 'Silver Foil, 3″×3.7″',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
 
@@ -161,7 +161,7 @@ export const SHAPES = [
       [-19.2, 32.0], [-17.3, 28.2], [-15.3, 24.4], [-13.3, 20.6], [-11.3, 16.8],
       [-9.5, 13.0], [-7.8, 9.2], [-6.3, 5.4], [-5.1, 1.6]
     ],
-    description: 'Awareness Ribbon — Text Only',
+    description: '1.9″×2.5″',
     dieLines: { inner: false, strokeMode: 'magenta' }
   }
 ];

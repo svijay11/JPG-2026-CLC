@@ -7,7 +7,9 @@ import Toast from './components/Toast';
 import CartModal from './components/CartModal';
 import { useLabelCanvas } from './hooks/useLabelCanvas';
 import { DEFAULT_RIBBON_COLOR_ID } from './config/ribbonColors';
+import OrderDownloadScreen from './components/OrderDownloadScreen';
 import { calculateTotal } from './config/pricing';
+import { imageElementToDataUrl } from './utils/renderLabelExport';
 
 export default function App() {
   const canvasRef = useRef(null);
@@ -35,6 +37,8 @@ export default function App() {
   // --- CART STATE ---
   const [cart, setCart] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [completedOrder, setCompletedOrder] = useState(null);
+  const [orderMeta, setOrderMeta] = useState(null);
 
   // UV toggle handler
   const handleUvToggle = () => setUvEnabled((prev) => !prev);
@@ -188,12 +192,19 @@ export default function App() {
     const { unitPrice, total } = calculateTotal(materialForPricing, quantity, uvEnabled);
 
     // 4. Append item to cart array
+    let imageDataUrl = null;
+    if (uploadedImage) {
+      imageDataUrl = imageElementToDataUrl(uploadedImage);
+    }
+
     const newItem = {
       shape: selectedShape,
-      material: materialForPricing,
+      material: selectedMaterial,
       textSegments,
       uvEnabled,
       ribbonColorId: shapeIsTextOnly(activeShape) ? ribbonColorId : null,
+      imageDataUrl,
+      imageOffset: { ...imageOffset },
       quantity,
       unitPrice,
       totalPrice: total,
@@ -219,8 +230,11 @@ export default function App() {
     setCart((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
-  const handleClearCart = () => {
+  const handleCompleteOrder = (items, meta = {}) => {
+    setCompletedOrder(items.map((item) => ({ ...item })));
+    setOrderMeta(meta);
     setCart([]);
+    setCartOpen(false);
   };
 
   return (
@@ -312,9 +326,19 @@ export default function App() {
         onClose={() => setCartOpen(false)}
         cartItems={cart}
         onRemoveItem={handleRemoveItem}
-        onClearCart={handleClearCart}
-        setToastMessage={setToastMessage}
+        onCompleteOrder={handleCompleteOrder}
       />
+
+      {completedOrder && (
+        <OrderDownloadScreen
+          orderItems={completedOrder}
+          orderMeta={orderMeta}
+          onDone={() => {
+            setCompletedOrder(null);
+            setOrderMeta(null);
+          }}
+        />
+      )}
 
       {/* Global Toast Notification */}
       {toastMessage && (

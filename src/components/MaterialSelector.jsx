@@ -31,7 +31,7 @@ export default function MaterialSelector({
             This template has no decorative border, so foil and digital finishes aren&apos;t available here.
           </p>
           <p className="text-xs text-gray-400 leading-relaxed">
-            Choose a bordered template — Crest Wave, Tapered Shield, Stepped Badge, Tall Label, or Baroque Oval — to customize the border finish.
+            Choose a bordered template — Crest Wave, Trophy Flagon, Bracket Label, Tall Label, or Baroque Oval — to customize the border finish.
           </p>
         </div>
       ) : (
@@ -68,7 +68,7 @@ export default function MaterialSelector({
                       {standardMaterial.name} (+$0.00)
                     </option>
                     <option value={FULL_BLEED_MATERIAL_ID}>
-                      {fullBleedMaterial.name} (+$0.00)
+                      no embellishments -- full bleed to die-line (+$0.00)
                     </option>
                   </optgroup>
                   <optgroup label="Digital (Smooth Finish)">
