@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SHAPES } from '../config/shapes';
 import { MATERIALS } from '../config/pricing';
+import { getLabelSheet } from '../config/labelSheets';
 
 export default function CartModal({
   isOpen,
@@ -125,6 +126,7 @@ export default function CartModal({
                         </div>
                         <p className="text-[10px] text-gray-500 mt-1 capitalize">
                           {shapeName} • {materialName.replace('-', ' ')}
+                          {item.labelSheetId && ` • ${getLabelSheet(item.labelSheetId).name}`}
                         </p>
                         {item.textSegments?.length > 0 && (
                           <p className="text-[10px] text-gray-400 italic truncate mt-0.5">

@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import { SHAPES, shapeIsTextOnly } from '../config/shapes';
 import { MATERIALS } from '../config/pricing';
 import { getRibbonColor } from '../config/ribbonColors';
+import { getLabelSheet } from '../config/labelSheets';
 import { renderLabelExportCanvas } from './renderLabelExport';
 
 const SHOP_NAME = 'Idyll Time Wines';
@@ -83,6 +84,10 @@ function getItemOptions(item) {
   lines.push(`Finish: ${materialName}`);
 
   if (shape?.description) lines.push(`Size: ${shape.description}`);
+
+  if (item.labelSheetId) {
+    lines.push(`Label sheet: ${getLabelSheet(item.labelSheetId).name}`);
+  }
 
   if (item.uvEnabled) lines.push('UV coating: Yes');
 

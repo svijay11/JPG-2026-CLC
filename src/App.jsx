@@ -9,6 +9,7 @@ import { useLabelCanvas } from './hooks/useLabelCanvas';
 import { DEFAULT_RIBBON_COLOR_ID } from './config/ribbonColors';
 import OrderDownloadScreen from './components/OrderDownloadScreen';
 import { calculateTotal } from './config/pricing';
+import { DEFAULT_LABEL_SHEET_ID } from './config/labelSheets';
 import { imageElementToDataUrl } from './utils/renderLabelExport';
 
 export default function App() {
@@ -33,6 +34,7 @@ export default function App() {
   const [quantity, setQuantity] = useState(10);
   const [ribbonColorId, setRibbonColorId] = useState(DEFAULT_RIBBON_COLOR_ID);
   const [toastMessage, setToastMessage] = useState(null);
+  const [selectedLabelSheet, setSelectedLabelSheet] = useState(DEFAULT_LABEL_SHEET_ID);
 
   // --- CART STATE ---
   const [cart, setCart] = useState([]);
@@ -205,6 +207,7 @@ export default function App() {
       ribbonColorId: shapeIsTextOnly(activeShape) ? ribbonColorId : null,
       imageDataUrl,
       imageOffset: { ...imageOffset },
+      labelSheetId: selectedLabelSheet,
       quantity,
       unitPrice,
       totalPrice: total,
@@ -221,6 +224,7 @@ export default function App() {
     setImageOffset({ x: 0, y: 0 });
     setUvEnabled(false);
     setRibbonColorId(DEFAULT_RIBBON_COLOR_ID);
+    setSelectedLabelSheet(DEFAULT_LABEL_SHEET_ID);
     setQuantity(10);
 
     setToastMessage('Added design to cart successfully!');
@@ -244,22 +248,42 @@ export default function App() {
       {showGallery && (
         <div className="fixed inset-0 z-50 bg-white overflow-auto p-8">
           <div className="max-w-[1400px] mx-auto">
-            <h1 className="text-4xl font-bold mb-6">Choose a Label Template</h1>
+            <div className="flex items-baseline justify-between gap-4 mb-6">
+              <h1 className="text-4xl font-bold">The GoodLabel</h1>
+              <p className="text-xs text-gray-400 whitespace-nowrap">Minimum 10 labels</p>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {SHAPES.map((s) => (
                   <button
                     key={s.id}
                     onClick={() => openEditorForShape(s.id)}
-                    className="flex flex-col items-stretch bg-white border rounded-lg p-4 hover:shadow-lg transition"
+                    className="flex flex-col items-stretch bg-white border rounded-lg p-4 hover:shadow-lg transition text-left"
                   >
                     <div className="w-full h-56 bg-gray-50 rounded flex items-center justify-center mb-3 overflow-hidden p-2">
                       <GalleryShapePreview shape={s} />
                     </div>
                     <div className="text-lg font-semibold text-luxury-charcoal">{s.name}</div>
-                    <div className="text-sm text-gray-500 mt-1">{s.description}</div>
+                    {s.tagline && (
+                      <p className="text-sm text-gray-600 mt-1.5 leading-snug">{s.tagline}</p>
+                    )}
+                    <div className="text-xs text-gray-400 mt-1.5">{s.description}</div>
                   </button>
               ))}
             </div>
+
+            <footer className="mt-16 pt-10 border-t border-gray-100 text-center">
+              <p className="text-base font-medium text-luxury-charcoal">Don&apos;t see what you want?</p>
+              <p className="text-sm text-gray-500 mt-2">
+                Email:{' '}
+                <a href="mailto:info@jp-graphics.com" className="text-luxury-gold hover:underline">
+                  info@jp-graphics.com
+                </a>
+                {' '}and{' '}
+                <a href="mailto:joan@idylltimewines.com" className="text-luxury-gold hover:underline">
+                  joan@idylltimewines.com
+                </a>
+              </p>
+            </footer>
           </div>
         </div>
       )}
@@ -318,6 +342,8 @@ export default function App() {
         onUvToggle={handleUvToggle}
         ribbonColorId={ribbonColorId}
         onRibbonColorChange={setRibbonColorId}
+        selectedLabelSheet={selectedLabelSheet}
+        onSelectLabelSheet={setSelectedLabelSheet}
       />
 
       {/* Slide-over Cart & Checkout Portal */}

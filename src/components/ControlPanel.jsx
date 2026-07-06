@@ -5,7 +5,9 @@ import ImageUploader from './ImageUploader';
 import TextControls from './TextControls';
 import { calculateTotal, STATIC_QUANTITY, isStandard4cpMaterial, isFullBleedMaterial } from '../config/pricing';
 import RibbonColorSelector from './RibbonColorSelector';
+import LabelSheetSelector from './LabelSheetSelector';
 import { getRibbonColor } from '../config/ribbonColors';
+import { getLabelSheet } from '../config/labelSheets';
 
 export default function ControlPanel({
   selectedShape,
@@ -32,7 +34,9 @@ export default function ControlPanel({
   uvEnabled,
   onUvToggle,
   ribbonColorId,
-  onRibbonColorChange
+  onRibbonColorChange,
+  selectedLabelSheet,
+  onSelectLabelSheet
 }) {
   const toggleImageReposition = () => {
     if (repositionMode === 'image') {
@@ -96,7 +100,7 @@ export default function ControlPanel({
             </div>
           </div>
           <div>
-            <button onClick={onOpenGallery} className="text-sm px-3 py-2 bg-white border rounded hover:bg-neutral-50">Change template</button>
+            <button onClick={onOpenGallery} className="text-sm px-3 py-2 bg-white border rounded hover:bg-neutral-50">Go Back</button>
           </div>
         </div>
 
@@ -104,7 +108,12 @@ export default function ControlPanel({
         <details className="bg-white border border-gray-100 rounded-lg">
           <summary className="px-4 py-3 cursor-pointer text-sm font-semibold text-pink-600 text-center">Select Options</summary>
           <div className="p-4 space-y-4">
-            {/* Keep existing sections inside the dropdown */}
+            <LabelSheetSelector
+              selectedSheetId={selectedLabelSheet}
+              onSelectSheet={onSelectLabelSheet}
+              disabled={repositionMode !== 'none'}
+            />
+
             {!isTextOnly && (
               <MaterialSelector
                 selectedMaterial={selectedMaterial}
@@ -241,6 +250,10 @@ export default function ControlPanel({
                   : 'Print: Standard 4CP'}
             </span>
             <span>${unitPrice.toFixed(2)} / unit</span>
+          </div>
+          <div className="flex justify-between text-gray-500 font-medium">
+            <span>Label sheet:</span>
+            <span>{getLabelSheet(selectedLabelSheet).name}</span>
           </div>
           <div className="flex justify-between text-gray-500 font-medium">
             <span>Quantity:</span>

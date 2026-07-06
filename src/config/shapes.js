@@ -1,7 +1,7 @@
 export const SHAPES = [
   {
     id: 'circle',
-    name: 'Circle',
+    name: 'The Circle',
     viewBoxWidth: 100,
     viewBoxHeight: 100,
     svgElement: {
@@ -13,11 +13,12 @@ export const SHAPES = [
     bleedImage: '/samples/circle-bleed.png',
     dieLineImage: '/samples/circle-dieline.png',
     description: 'Digital Gold, 2.5″',
+    tagline: 'Upload your photo, add curved custom text, and optionally add UV coating.',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
   {
     id: 'tall-label',
-    name: 'Tall Label',
+    name: 'The Rectangle',
     viewBoxWidth: 100,
     viewBoxHeight: 100,
     svgElement: {
@@ -31,11 +32,12 @@ export const SHAPES = [
     bleedImage: '/samples/tall-label-bleed.png',
     dieLineImage: '/samples/tall-label-dieline.png',
     description: '4CP, 2.5″×3.9″',
+    tagline: 'Swap in your photo, pick a border finish (standard, full bleed, digital, or foil), add text, and optional UV coating.',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
   {
     id: 'squircle',
-    name: 'Squircle',
+    name: 'The Squircle',
     viewBoxWidth: 100,
     viewBoxHeight: 100,
     svgElement: {
@@ -48,6 +50,7 @@ export const SHAPES = [
     bleedImage: '/samples/squircle-bleed.png',
     dieLineImage: '/samples/squircle-dieline.png',
     description: '4CP, 3.25″×2.75″',
+    tagline: 'Upload your photo, add curved custom text, and optionally add UV coating.',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
 
@@ -55,7 +58,7 @@ export const SHAPES = [
 
   {
     id: 'template_page_14_stepped_badge',
-    name: 'Bracket Label',
+    name: 'The Bracket',
     viewBoxWidth: 100,
     viewBoxHeight: 100,
     svgElement: {
@@ -71,12 +74,13 @@ export const SHAPES = [
     bleedImage: '/samples/stepped-badge-bleed.png',
     dieLineImage: '/samples/stepped-badge-dieline.png',
     description: 'Digital Gold, 4.06″×4.01″',
+    tagline: 'Upload your photo, choose a border finish (standard, full bleed, digital, or foil), add text, and optional UV coating.',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
 
   {
     id: 'template_page_12_tapered_shield',
-    name: 'Trophy Flagon',
+    name: 'The Trophy Flagon',
     viewBoxWidth: 100,
     viewBoxHeight: 100,
     svgElement: {
@@ -92,12 +96,13 @@ export const SHAPES = [
     bleedImage: '/samples/tapered-shield-bleed.png',
     dieLineImage: '/samples/tapered-shield-dieline.png',
     description: 'Digital Gold, 3.36″×4.13″',
+    tagline: 'Upload your photo, customize the foil border finish, add curved text, and optional UV coating.',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
 
   {
     id: 'template_page_10_crest_wave',
-    name: 'Crest Top with S-Wave Bottom',
+    name: 'The Crest',
     viewBoxWidth: 100,
     viewBoxHeight: 100,
     svgElement: {
@@ -113,12 +118,13 @@ export const SHAPES = [
     bleedImage: '/samples/crest-wave-bleed.png',
     dieLineImage: '/samples/crest-wave-dieline.png',
     description: 'Gold Foil, 3.66″×3.82″',
+    tagline: 'Upload your photo, pick a border finish (standard, full bleed, digital, or gold foil), add text, and optional UV coating.',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
 
   {
     id: 'template_page_8_perfect_baroque_oval',
-    name: 'Baroque Scalloped Oval',
+    name: 'The Baroque Oval',
     viewBoxWidth: 100,
     viewBoxHeight: 100,
     svgElement: {
@@ -134,12 +140,13 @@ export const SHAPES = [
     bleedImage: '/samples/baroque-oval-bleed.png',
     dieLineImage: '/samples/baroque-oval-dieline.png',
     description: 'Silver Foil, 3″×3.7″',
+    tagline: 'Upload your photo, choose a border finish (standard, full bleed, digital, or silver foil), add text, and optional UV coating.',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
 
   {
     id: 'breast-cancer-ribbon',
-    name: 'Breast Cancer Awareness Ribbon',
+    name: 'The Ribbon',
     viewBoxWidth: 76,
     viewBoxHeight: 100,
     svgElement: {
@@ -162,6 +169,7 @@ export const SHAPES = [
       [-9.5, 13.0], [-7.8, 9.2], [-6.3, 5.4], [-5.1, 1.6]
     ],
     description: '1.9″×2.5″',
+    tagline: 'Choose a ribbon color and add your own message curved along the strand.',
     dieLines: { inner: false, strokeMode: 'magenta' }
   }
 ];

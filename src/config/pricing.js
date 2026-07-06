@@ -12,7 +12,7 @@ export const MATERIALS = [
   },
   {
     id: FULL_BLEED_MATERIAL_ID,
-    name: 'No Border — Full Bleed to Die Line',
+    name: 'No Embellishments -- Full Bleed To Die-Line',
     price: 0,
     overlayType: 'full-bleed',
     color: '#ffffff',
