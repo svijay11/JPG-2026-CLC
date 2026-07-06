@@ -13,6 +13,7 @@ export const SHAPES = [
     bleedImage: '/samples/circle-bleed.png',
     dieLineImage: '/samples/circle-dieline.png',
     description: 'Digital Gold, 2.5″',
+    printSizeInches: { width: 2.5, height: 2.5 },
     tagline: 'Upload your photo, add curved custom text, and optionally add UV coating.',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
@@ -32,6 +33,7 @@ export const SHAPES = [
     bleedImage: '/samples/tall-label-bleed.png',
     dieLineImage: '/samples/tall-label-dieline.png',
     description: '4CP, 2.5″×3.9″',
+    printSizeInches: { width: 2.5, height: 3.9 },
     tagline: 'Swap in your photo, pick a border finish (standard, full bleed, digital, or foil), add text, and optional UV coating.',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
@@ -50,6 +52,7 @@ export const SHAPES = [
     bleedImage: '/samples/squircle-bleed.png',
     dieLineImage: '/samples/squircle-dieline.png',
     description: '4CP, 3.25″×2.75″',
+    printSizeInches: { width: 3.25, height: 2.75 },
     tagline: 'Upload your photo, add curved custom text, and optionally add UV coating.',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
@@ -74,6 +77,7 @@ export const SHAPES = [
     bleedImage: '/samples/stepped-badge-bleed.png',
     dieLineImage: '/samples/stepped-badge-dieline.png',
     description: 'Digital Gold, 4.06″×4.01″',
+    printSizeInches: { width: 4.06, height: 4.01 },
     tagline: 'Upload your photo, choose a border finish (standard, full bleed, digital, or foil), add text, and optional UV coating.',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
@@ -96,6 +100,7 @@ export const SHAPES = [
     bleedImage: '/samples/tapered-shield-bleed.png',
     dieLineImage: '/samples/tapered-shield-dieline.png',
     description: 'Digital Gold, 3.36″×4.13″',
+    printSizeInches: { width: 3.36, height: 4.13 },
     tagline: 'Upload your photo, customize the foil border finish, add curved text, and optional UV coating.',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
@@ -118,6 +123,7 @@ export const SHAPES = [
     bleedImage: '/samples/crest-wave-bleed.png',
     dieLineImage: '/samples/crest-wave-dieline.png',
     description: 'Gold Foil, 3.66″×3.82″',
+    printSizeInches: { width: 3.66, height: 3.82 },
     tagline: 'Upload your photo, pick a border finish (standard, full bleed, digital, or gold foil), add text, and optional UV coating.',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
@@ -140,6 +146,7 @@ export const SHAPES = [
     bleedImage: '/samples/baroque-oval-bleed.png',
     dieLineImage: '/samples/baroque-oval-dieline.png',
     description: 'Silver Foil, 3″×3.7″',
+    printSizeInches: { width: 3, height: 3.7 },
     tagline: 'Upload your photo, choose a border finish (standard, full bleed, digital, or silver foil), add text, and optional UV coating.',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
@@ -169,10 +176,41 @@ export const SHAPES = [
       [-9.5, 13.0], [-7.8, 9.2], [-6.3, 5.4], [-5.1, 1.6]
     ],
     description: '1.9″×2.5″',
+    printSizeInches: { width: 1.9, height: 2.5 },
     tagline: 'Choose a ribbon color and add your own message curved along the strand.',
     dieLines: { inner: false, strokeMode: 'magenta' }
   }
 ];
+
+const INCH_TO_MM = 25.4;
+
+/** Trim size in inches for print/PDF placement. */
+export function getShapePrintSizeInches(shapeOrId) {
+  const shape = typeof shapeOrId === 'string'
+    ? SHAPES.find((s) => s.id === shapeOrId)
+    : shapeOrId;
+  if (shape?.printSizeInches) return shape.printSizeInches;
+
+  const sizeText = getShapeSize(shape);
+  const match = sizeText.match(/([\d.]+)\s*[″"×x]\s*([\d.]+)/);
+  if (match) {
+    return { width: parseFloat(match[1]), height: parseFloat(match[2]) };
+  }
+  const single = sizeText.match(/([\d.]+)\s*[″"]/);
+  if (single) {
+    const d = parseFloat(single[1]);
+    return { width: d, height: d };
+  }
+  return { width: 3, height: 3 };
+}
+
+export function getShapePrintSizeMm(shapeOrId) {
+  const inches = getShapePrintSizeInches(shapeOrId);
+  return {
+    width: inches.width * INCH_TO_MM,
+    height: inches.height * INCH_TO_MM
+  };
+}
 
 /** Physical dimensions only — strips material prefix from description (e.g. "4CP, 2.5"x3.9"" → "2.5"x3.9""). */
 export function getShapeSize(shapeOrId) {

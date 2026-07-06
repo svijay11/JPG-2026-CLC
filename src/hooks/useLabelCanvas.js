@@ -15,6 +15,7 @@ import { drawTextAlongPath, mapShapePathToCanvas } from '../utils/curvedText';
 import { drawTintedRibbon } from '../utils/ribbonTint';
 import { getRibbonColor } from '../config/ribbonColors';
 import { isFullBleedMaterial } from '../config/pricing';
+import { resolveUploadedPhotoPlacement, computeImageDraw } from '../utils/renderLabelPhoto';
 
 export const useLabelCanvas = (canvasRef, {
   selectedShape,
@@ -185,7 +186,31 @@ export const useLabelCanvas = (canvasRef, {
       }
     }
 
+    const photoPlacement = uploadedImage
+      ? resolveUploadedPhotoPlacement({
+        shape,
+        dieData,
+        bleedLayoutRef,
+        labelLayout,
+        foilClipData,
+        uploadedImage,
+        noEmbellishments: false,
+        hasFoilBorder,
+        fullBleed
+      })
+      : null;
+
     if (activeImg) {
+      if (uploadedImage && photoPlacement) {
+        imgDraw = computeImageDraw(activeImg, {
+          bounds: photoPlacement.bounds,
+          coverFit: photoPlacement.coverFit,
+          imageScale,
+          imageOffset,
+          scaleFactor: 1,
+          uploadedImage: true
+        });
+      } else {
       const imgW = activeImg.width;
       const imgH = activeImg.height;
       const imgRatio = imgW / imgH;
@@ -264,6 +289,7 @@ export const useLabelCanvas = (canvasRef, {
         w: finalW,
         h: finalH
       };
+      }
     }
 
     const overlayRect = dieData?.hasBleed && trimLayout
@@ -292,11 +318,18 @@ export const useLabelCanvas = (canvasRef, {
     if (activeImg && imgDraw) {
       if ((usesSampleDieLines || usesBleedDieLines) && dieData && uploadedImage && !(repositionMode === 'image')) {
         ctx.save();
-        const clipMask = useBleedPhoto
-          ? (dieData.bleedMaskCanvas || dieData.maskCanvas)
-          : (foilClipData?.photoClipMask || dieData.maskCanvas);
-        const clipLayout = useBleedPhoto && dieData.hasBleed ? dieData.bleedLayout : labelLayout;
-        drawImageWithSampleMask(ctx, activeImg, clipMask, clipLayout, imgDraw);
+        if (photoPlacement) {
+          drawImageWithSampleMask(
+            ctx,
+            activeImg,
+            photoPlacement.clipMask,
+            photoPlacement.clipLayout,
+            imgDraw
+          );
+        } else {
+          const clipMask = foilClipData?.photoClipMask || dieData.maskCanvas;
+          drawImageWithSampleMask(ctx, activeImg, clipMask, labelLayout, imgDraw);
+        }
         ctx.restore();
       } else if (isSampleLabel || (repositionMode === 'image' && uploadedImage)) {
         ctx.save();

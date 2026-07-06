@@ -6,12 +6,12 @@ export const RIBBON_COLORS = [
   { id: 'red', name: 'Red', color: '#dc2626' },
   { id: 'burgundy', name: 'Burgundy', color: '#881337' },
   { id: 'purple', name: 'Purple', color: '#9333ea' },
-  { id: 'lavender', name: 'Lavender', color: '#a855f7' },
+  { id: 'yellow', name: 'Yellow', color: '#ffcc00' },
   { id: 'blue', name: 'Blue', color: '#2563eb' },
   { id: 'teal', name: 'Teal', color: '#0d9488' },
   { id: 'green', name: 'Green', color: '#16a34a' },
   { id: 'gold', name: 'Gold', color: '#ca8a04' },
-  { id: 'black', name: 'Black', color: '#262626' },
+  { id: 'silver', name: 'Silver', color: '#c0c0c0' },
   { id: 'white', name: 'White', color: '#f5f5f5' }
 ];
 

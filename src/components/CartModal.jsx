@@ -4,6 +4,16 @@ import { MATERIALS } from '../config/pricing';
 import { getLabelSheet } from '../config/labelSheets';
 import CartItemPreview from './CartItemPreview';
 
+export const SHIPPING_COST = 6;
+
+const EMPTY_SHIPPING_ADDRESS = {
+  name: '',
+  street: '',
+  city: '',
+  state: '',
+  zip: ''
+};
+
 export default function CartModal({
   isOpen,
   onClose,
@@ -12,6 +22,12 @@ export default function CartModal({
   onCompleteOrder
 }) {
   const [paymentMethod, setPaymentMethod] = useState('card');
+  const [deliveryMethod, setDeliveryMethod] = useState('pickup');
+  const [shippingAddress, setShippingAddress] = useState(EMPTY_SHIPPING_ADDRESS);
+
+  const updateShippingField = (field, value) => {
+    setShippingAddress((prev) => ({ ...prev, [field]: value }));
+  };
   
   // Card payment form state
   const [cardName, setCardName] = useState('');
@@ -22,6 +38,8 @@ export default function CartModal({
   if (!isOpen) return null;
 
   const grandTotal = cartItems.reduce((acc, item) => acc + item.totalPrice, 0);
+  const shippingCost = deliveryMethod === 'shipping' ? SHIPPING_COST : 0;
+  const orderTotal = grandTotal + shippingCost;
 
   const handleCheckout = (e) => {
     e.preventDefault();
@@ -31,13 +49,34 @@ export default function CartModal({
       return;
     }
 
+    if (deliveryMethod === 'shipping') {
+      const { name, street, city, state, zip } = shippingAddress;
+      if (!name.trim() || !street.trim() || !city.trim() || !state.trim() || !zip.trim()) {
+        alert('Please complete all shipping address fields.');
+        return;
+      }
+    }
+
+    const normalizedShipping = deliveryMethod === 'shipping'
+      ? {
+        name: shippingAddress.name.trim(),
+        street: shippingAddress.street.trim(),
+        city: shippingAddress.city.trim(),
+        state: shippingAddress.state.trim(),
+        zip: shippingAddress.zip.trim()
+      }
+      : null;
+
     // FOR NOW: bypass payment and go straight to PDF download
     onCompleteOrder(cartItems, {
       paymentMethod,
       buyerName: cardName.trim() || 'Customer',
       orderDate: new Date().toISOString(),
       orderId: `#${Date.now().toString().slice(-10)}`,
-      buyerId: Math.random().toString(36).slice(2, 19)
+      buyerId: Math.random().toString(36).slice(2, 19),
+      deliveryMethod,
+      shippingAddress: normalizedShipping,
+      shippingCost
     });
   };
 
@@ -142,10 +181,123 @@ export default function CartModal({
 
               <hr className="border-gray-100" />
 
-              {/* Grand Total */}
-              <div className="flex justify-between items-baseline">
-                <span className="text-sm font-bold text-luxury-charcoal">Subtotal:</span>
-                <span className="text-2xl font-bold text-luxury-gold">${grandTotal.toFixed(2)}</span>
+              {/* Delivery */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 font-sansUI">
+                  Delivery
+                </h3>
+                <div className="space-y-2">
+                  <label className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:border-luxury-gold/50 has-[:checked]:border-luxury-gold has-[:checked]:bg-luxury-gold/5 transition-colors">
+                    <input
+                      type="radio"
+                      name="deliveryMethod"
+                      value="pickup"
+                      checked={deliveryMethod === 'pickup'}
+                      onChange={() => setDeliveryMethod('pickup')}
+                      className="mt-0.5 accent-luxury-gold"
+                    />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-xs font-bold text-luxury-charcoal">Pickup</span>
+                      <span className="block text-[10px] text-gray-500 mt-0.5">Free — pick up at the winery</span>
+                    </span>
+                    <span className="text-xs font-bold text-luxury-gold">Free</span>
+                  </label>
+                  <label className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:border-luxury-gold/50 has-[:checked]:border-luxury-gold has-[:checked]:bg-luxury-gold/5 transition-colors">
+                    <input
+                      type="radio"
+                      name="deliveryMethod"
+                      value="shipping"
+                      checked={deliveryMethod === 'shipping'}
+                      onChange={() => setDeliveryMethod('shipping')}
+                      className="mt-0.5 accent-luxury-gold"
+                    />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-xs font-bold text-luxury-charcoal">Shipping</span>
+                      <span className="block text-[10px] text-gray-500 mt-0.5">USPS delivery to your address</span>
+                    </span>
+                    <span className="text-xs font-bold text-luxury-gold">${SHIPPING_COST.toFixed(2)}</span>
+                  </label>
+                </div>
+                {deliveryMethod === 'shipping' && (
+                  <div className="space-y-3 p-3.5 bg-gray-50 border border-gray-100 rounded-lg">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase">Shipping address</p>
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Name</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Jane Doe"
+                        value={shippingAddress.name}
+                        onChange={(e) => updateShippingField('name', e.target.value)}
+                        className="w-full p-2 text-xs border border-gray-200 rounded focus:border-luxury-gold focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Street address</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="123 Main St"
+                        value={shippingAddress.street}
+                        onChange={(e) => updateShippingField('street', e.target.value)}
+                        className="w-full p-2 text-xs border border-gray-200 rounded focus:border-luxury-gold focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">City</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Napa"
+                        value={shippingAddress.city}
+                        onChange={(e) => updateShippingField('city', e.target.value)}
+                        className="w-full p-2 text-xs border border-gray-200 rounded focus:border-luxury-gold focus:outline-none"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">State</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="CA"
+                          value={shippingAddress.state}
+                          onChange={(e) => updateShippingField('state', e.target.value)}
+                          className="w-full p-2 text-xs border border-gray-200 rounded focus:border-luxury-gold focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">ZIP</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="94558"
+                          value={shippingAddress.zip}
+                          onChange={(e) => updateShippingField('zip', e.target.value)}
+                          className="w-full p-2 text-xs border border-gray-200 rounded focus:border-luxury-gold focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <hr className="border-gray-100" />
+
+              {/* Order total */}
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between items-baseline text-gray-600">
+                  <span>Subtotal</span>
+                  <span>${grandTotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-baseline text-gray-600">
+                  <span>{deliveryMethod === 'shipping' ? 'Shipping (USPS)' : 'Pickup'}</span>
+                  <span>{shippingCost === 0 ? 'Free' : `$${shippingCost.toFixed(2)}`}</span>
+                </div>
+                <div className="flex justify-between items-baseline pt-1">
+                  <span className="font-bold text-luxury-charcoal">Order total</span>
+                  <span className="text-2xl font-bold text-luxury-gold">${orderTotal.toFixed(2)}</span>
+                </div>
               </div>
 
               <hr className="border-gray-100" />

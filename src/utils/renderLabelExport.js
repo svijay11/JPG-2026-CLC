@@ -1,4 +1,4 @@
-import { SHAPES, shapeHasFoilBorder, shapeIsTextOnly, shapeHasBleedAssets } from '../config/shapes';
+import { SHAPES, shapeHasFoilBorder, shapeIsTextOnly, shapeHasBleedAssets, getShapePrintSizeInches } from '../config/shapes';
 import {
   computeSampleLabelLayout,
   drawFoilBorderWithMaterial,
@@ -11,9 +11,52 @@ import { drawTextAlongPath, mapShapePathToCanvas } from '../utils/curvedText';
 import { drawTintedRibbon } from '../utils/ribbonTint';
 import { getRibbonColor } from '../config/ribbonColors';
 import { isFullBleedMaterial, FULL_BLEED_MATERIAL_ID } from '../config/pricing';
+import { resolveUploadedPhotoPlacement, computeImageDraw } from '../utils/renderLabelPhoto';
 
 const PREVIEW_LOGICAL_SIZE = 600;
 const PREVIEW_MAX_TARGET = 420;
+
+export { PREVIEW_LOGICAL_SIZE, PREVIEW_MAX_TARGET };
+
+export function normalizeLayoutBounds(bounds) {
+  if (!bounds) return null;
+  if ('width' in bounds) {
+    return { x: bounds.x, y: bounds.y, w: bounds.width, h: bounds.height };
+  }
+  return { x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h };
+}
+
+export function cropCanvasToBounds(sourceCanvas, bounds) {
+  const { x, y, w, h } = normalizeLayoutBounds(bounds);
+  const sx = Math.max(0, Math.floor(x));
+  const sy = Math.max(0, Math.floor(y));
+  const sw = Math.min(Math.ceil(w), sourceCanvas.width - sx);
+  const sh = Math.min(Math.ceil(h), sourceCanvas.height - sy);
+  const canvas = document.createElement('canvas');
+  canvas.width = sw;
+  canvas.height = sh;
+  canvas.getContext('2d').drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+  return canvas;
+}
+
+/** Map export canvas pixels to physical mm with uniform scale (preserves aspect ratio). */
+export function computePdfLabelDrawSizeMm(exportBounds, trimLayout, shapeOrId) {
+  const trimIn = getShapePrintSizeInches(shapeOrId);
+
+  if (!exportBounds?.w || !exportBounds?.h || !trimLayout?.w || !trimLayout?.h) {
+    return { width: trimIn.width * 25.4, height: trimIn.height * 25.4 };
+  }
+
+  // Same max-dimension mapping as computeSampleLabelLayout / preview
+  const trimMaxPx = Math.max(trimLayout.w, trimLayout.h);
+  const trimMaxIn = Math.max(trimIn.width, trimIn.height);
+  const mmPerPx = (trimMaxIn * 25.4) / trimMaxPx;
+
+  return {
+    width: exportBounds.w * mmPerPx,
+    height: exportBounds.h * mmPerPx
+  };
+}
 
 export function readBlobAsDataUrl(blob) {
   return new Promise((resolve, reject) => {
@@ -80,10 +123,6 @@ export async function renderLabelExportCanvas(item, options = {}) {
   const textSegments = item.textSegments || [];
   const imageOffset = item.imageOffset || { x: 0, y: 0 };
   const imageScale = item.imageScale ?? 1;
-  const scaledOffset = {
-    x: imageOffset.x * scaleFactor,
-    y: imageOffset.y * scaleFactor
-  };
   const uvEnabled = noEmbellishments ? false : Boolean(item.uvEnabled);
   const ribbonColorId = item.ribbonColorId;
 
@@ -155,7 +194,6 @@ export async function renderLabelExportCanvas(item, options = {}) {
   const hasFoilBorder = shapeHasFoilBorder(shape) && Boolean(foilBorderImage);
   const fullBleed = noEmbellishments || isFullBleedMaterial(materialId);
   const showFoilBorder = !noEmbellishments && hasFoilBorder && !fullBleed;
-  const useBleedPhoto = usesBleedDieLines && Boolean(uploadedImage);
 
   let labelLayout = sampleImage
     ? computeSampleLabelLayout(sampleImage, maxTargetSize)
@@ -178,7 +216,10 @@ export async function renderLabelExportCanvas(item, options = {}) {
   let dieData = null;
   let foilClipData = null;
 
-  if (usesBleedDieLines) {
+  if (shapeHasBleedAssets(shape)) {
+    if (!bleedImage || !dieLineImage) {
+      throw new Error(`Missing bleed assets for "${shape.id}".`);
+    }
     dieData = getBleedDieLineData(bleedImage, dieLineImage, maxTargetSize);
     bleedLayoutRef = recenterLayout(dieData.bleedLayout);
     trimLayout = recenterLayout(dieData.trimLayout);
@@ -220,20 +261,42 @@ export async function renderLabelExportCanvas(item, options = {}) {
   const isSampleLabel = !isTextOnlyShape && !uploadedImage && sampleImage && !shape.clipSampleToShape;
   let imgDraw = null;
 
-  if (activeImg) {
-    const imgW = activeImg.width;
-    const imgH = activeImg.height;
-    const imgRatio = imgW / imgH;
-    const bounds = (useBleedPhoto || noEmbellishments) && bleedLayoutRef ? bleedLayoutRef : labelLayout;
-    if (!bounds) {
-      throw new Error(`Could not compute label layout for shape "${shape.id}".`);
-    }
-    const boundsRatio = bounds.w / bounds.h;
-    let drawW;
-    let drawH;
-    const coverFit = useBleedPhoto || noEmbellishments;
+  const photoPlacement = uploadedImage
+    ? resolveUploadedPhotoPlacement({
+      shape,
+      dieData,
+      bleedLayoutRef,
+      labelLayout,
+      foilClipData,
+      uploadedImage,
+      noEmbellishments,
+      hasFoilBorder,
+      fullBleed
+    })
+    : null;
 
-    if (coverFit) {
+  if (activeImg) {
+    if (uploadedImage && photoPlacement) {
+      imgDraw = computeImageDraw(activeImg, {
+        bounds: photoPlacement.bounds,
+        coverFit: photoPlacement.coverFit,
+        imageScale,
+        imageOffset,
+        scaleFactor,
+        uploadedImage: true
+      });
+    } else if (isSampleLabel || usesSampleDieLines || usesBleedDieLines) {
+      const imgW = activeImg.width;
+      const imgH = activeImg.height;
+      const imgRatio = imgW / imgH;
+      const bounds = labelLayout;
+      if (!bounds) {
+        throw new Error(`Could not compute label layout for shape "${shape.id}".`);
+      }
+      const boundsRatio = bounds.w / bounds.h;
+      let drawW;
+      let drawH;
+
       if (imgRatio > boundsRatio) {
         drawH = bounds.h;
         drawW = drawH * imgRatio;
@@ -241,22 +304,36 @@ export async function renderLabelExportCanvas(item, options = {}) {
         drawW = bounds.w;
         drawH = drawW / imgRatio;
       }
-    } else if (imgRatio > boundsRatio) {
-      drawH = bounds.h;
-      drawW = drawH * imgRatio;
-    } else {
-      drawW = bounds.w;
-      drawH = drawW / imgRatio;
-    }
 
-    const finalX = bounds.x + (bounds.w - drawW * imageScale) / 2 + (uploadedImage ? scaledOffset.x : 0);
-    const finalY = bounds.y + (bounds.h - drawH * imageScale) / 2 + (uploadedImage ? scaledOffset.y : 0);
-    imgDraw = {
-      x: finalX,
-      y: finalY,
-      w: drawW * (uploadedImage ? imageScale : 1),
-      h: drawH * (uploadedImage ? imageScale : 1)
-    };
+      imgDraw = {
+        x: bounds.x + (bounds.w - drawW) / 2,
+        y: bounds.y + (bounds.h - drawH) / 2,
+        w: drawW,
+        h: drawH
+      };
+    } else {
+      const imgW = activeImg.width;
+      const imgH = activeImg.height;
+      const imgRatio = imgW / imgH;
+      const rectRatio = rect.width / rect.height;
+      let drawW;
+      let drawH;
+
+      if (imgRatio > rectRatio) {
+        drawH = rect.height;
+        drawW = drawH * imgRatio;
+      } else {
+        drawW = rect.width;
+        drawH = drawW / imgRatio;
+      }
+
+      imgDraw = {
+        x: rect.x + (rect.width - drawW) / 2,
+        y: rect.y + (rect.height - drawH) / 2,
+        w: drawW,
+        h: drawH
+      };
+    }
   }
 
   const overlayRect = trimLayout
@@ -279,14 +356,16 @@ export async function renderLabelExportCanvas(item, options = {}) {
           ctx.drawImage(clipMask, clipLayout.x, clipLayout.y, clipLayout.w, clipLayout.h);
           ctx.restore();
         }
-      } else {
-        const clipMask = useBleedPhoto || noEmbellishments
-          ? (dieData.bleedMaskCanvas || dieData.maskCanvas)
-          : (foilClipData?.photoClipMask || dieData.maskCanvas);
-        const clipLayout = (useBleedPhoto || noEmbellishments) && dieData.hasBleed
-          ? bleedLayoutRef
-          : labelLayout;
-        drawImageWithSampleMask(ctx, uploadedImage, clipMask, clipLayout, imgDraw);
+      } else if (photoPlacement) {
+        drawImageWithSampleMask(
+          ctx,
+          uploadedImage,
+          photoPlacement.clipMask,
+          photoPlacement.clipLayout,
+          imgDraw
+        );
+      } else if (dieData?.maskCanvas) {
+        drawImageWithSampleMask(ctx, uploadedImage, dieData.maskCanvas, labelLayout, imgDraw);
       }
     } else if (isSampleLabel) {
       ctx.drawImage(activeImg, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h);
@@ -367,5 +446,12 @@ export async function renderLabelExportCanvas(item, options = {}) {
     ctx.restore();
   }
 
-  return canvas;
+  return {
+    canvas,
+    exportBounds: normalizeLayoutBounds(
+      dieData?.hasBleed && bleedLayoutRef ? bleedLayoutRef : (trimLayout || rect)
+    ),
+    trimLayout: normalizeLayoutBounds(trimLayout || rect),
+    bleedLayout: normalizeLayoutBounds(bleedLayoutRef)
+  };
 }

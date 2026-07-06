@@ -3,10 +3,11 @@ import { SHAPES, shapeIsTextOnly, getShapeSize } from '../config/shapes';
 import { MATERIALS } from '../config/pricing';
 import { getRibbonColor } from '../config/ribbonColors';
 import { getLabelSheet } from '../config/labelSheets';
-import { renderLabelExportCanvas } from './renderLabelExport';
+import { renderLabelExportCanvas, cropCanvasToBounds, computePdfLabelDrawSizeMm, PREVIEW_LOGICAL_SIZE } from './renderLabelExport';
 
 const SHOP_NAME = 'Idyll Time Wines';
 const SHOP_URL = 'idylltimewines.com';
+const DEFAULT_SHIPPING_COST = 6;
 
 /** jsPDF Helvetica only supports Latin-1 — normalize punctuation from our UI strings. */
 function pdfText(value) {
@@ -47,6 +48,39 @@ function paymentLabel(method) {
   if (method === 'google') return 'Paid via Google Pay';
   if (method === 'card') return 'Paid via Credit Card';
   return 'Paid at checkout';
+}
+
+function getShippingCost(orderMeta = {}) {
+  if (orderMeta.deliveryMethod !== 'shipping') return 0;
+  return typeof orderMeta.shippingCost === 'number'
+    ? orderMeta.shippingCost
+    : DEFAULT_SHIPPING_COST;
+}
+
+function formatShippingAddressLines(shippingAddress) {
+  if (!shippingAddress) return [];
+
+  if (typeof shippingAddress === 'string') {
+    const trimmed = shippingAddress.trim();
+    return trimmed ? trimmed.split(/\r?\n/) : [];
+  }
+
+  const { name, street, city, state, zip } = shippingAddress;
+  const lines = [];
+  if (name?.trim()) lines.push(name.trim());
+  if (street?.trim()) lines.push(street.trim());
+  const cityLine = [city?.trim(), state?.trim()].filter(Boolean).join(', ');
+  const cityStateZip = [cityLine, zip?.trim()].filter(Boolean).join(' ');
+  if (cityStateZip) lines.push(cityStateZip);
+  return lines;
+}
+
+function getDeliveryLines(orderMeta = {}) {
+  if (orderMeta.deliveryMethod === 'shipping') {
+    const lines = [`USPS Shipping ($${getShippingCost(orderMeta).toFixed(2)})`];
+    return lines.concat(formatShippingAddressLines(orderMeta.shippingAddress));
+  }
+  return ['Pickup (free)'];
 }
 
 function hr(pdf, x1, x2, y) {
@@ -104,9 +138,12 @@ function getItemOptions(item) {
   return lines;
 }
 
-function computeOrderTotals(items) {
+function computeOrderTotals(items, orderMeta = {}) {
   const itemTotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
-  return { itemTotal, subtotal: itemTotal, orderTotal: itemTotal };
+  const shippingCost = getShippingCost(orderMeta);
+  const subtotal = itemTotal;
+  const orderTotal = subtotal + shippingCost;
+  return { itemTotal, shippingCost, subtotal, orderTotal };
 }
 
 function drawReceiptPage(pdf, items, orderMeta) {
@@ -143,12 +180,13 @@ function drawReceiptPage(pdf, items, orderMeta) {
   pdf.text(`${items.length} item${items.length === 1 ? '' : 's'}`, rightX, itemsHeaderY);
   hr(pdf, rightX, rightEdge, itemsHeaderY + 3);
 
-  // Left column — order metadata (no shipping)
+  // Left column — order metadata
   let leftY = 48;
   leftY = drawLeftField(pdf, leftX, leftY, 'Order', [orderId]);
   leftY = drawLeftField(pdf, leftX, leftY, 'Order date', [orderDate]);
   leftY = drawLeftField(pdf, leftX, leftY, 'Buyer', [`${buyerName} (${buyerId})`]);
-  drawLeftField(pdf, leftX, leftY, 'Payment method', [payment]);
+  leftY = drawLeftField(pdf, leftX, leftY, 'Payment method', [payment]);
+  drawLeftField(pdf, leftX, leftY, 'Delivery', getDeliveryLines(orderMeta));
 
   // Right column — line items
   let itemY = itemsHeaderY + 12;
@@ -193,8 +231,8 @@ function drawReceiptPage(pdf, items, orderMeta) {
 
   hr(pdf, rightX, rightEdge, itemY);
 
-  // Totals (Etsy-style, minus shipping/refund/tax/discount lines)
-  const { itemTotal, subtotal, orderTotal } = computeOrderTotals(items);
+  // Totals (Etsy-style)
+  const { itemTotal, shippingCost, subtotal, orderTotal } = computeOrderTotals(items, orderMeta);
   let totalY = itemY + 10;
   const labelX = rightEdge - 42;
 
@@ -209,6 +247,16 @@ function drawReceiptPage(pdf, items, orderMeta) {
 
   drawTotalRow('Item total', itemTotal);
   drawTotalRow('Subtotal', subtotal);
+  if (shippingCost > 0) {
+    drawTotalRow('Shipping (USPS)', shippingCost);
+  } else {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(20, 20, 20);
+    pdf.text('Pickup', labelX, totalY);
+    pdf.text('Free', rightEdge, totalY, { align: 'right' });
+    totalY += 7;
+  }
   drawTotalRow('Order total', orderTotal, true);
 }
 
@@ -225,31 +273,39 @@ async function addPrintReadyPage(pdf, item, { noEmbellishments = false } = {}) {
     pdf.text('Designer print file -- no embellishments (photo, text, and bleed only)', 14, 10);
   }
 
-  const canvas = await renderLabelExportCanvas(item, { noEmbellishments });
+  const { canvas, exportBounds, trimLayout } = await renderLabelExportCanvas(item, {
+    noEmbellishments,
+    logicalSize: PREVIEW_LOGICAL_SIZE,
+    scaleFactor: 1
+  });
+  const cropped = cropCanvasToBounds(canvas, exportBounds);
+
   let imgData;
   try {
-    imgData = canvas.toDataURL('image/jpeg', 0.92);
+    imgData = cropped.toDataURL('image/jpeg', 0.92);
   } catch {
-    imgData = canvas.toDataURL('image/png');
+    imgData = cropped.toDataURL('image/png');
   }
 
   const pageH = pdf.internal.pageSize.getHeight();
   const margin = 14;
   const maxW = pageW - margin * 2;
   const maxH = pageH - topMargin - margin;
-  const aspect = canvas.width / canvas.height;
 
-  let drawW = maxW;
-  let drawH = drawW / aspect;
-  if (drawH > maxH) {
-    drawH = maxH;
-    drawW = drawH * aspect;
-  }
+  let { width: drawWmm, height: drawHmm } = computePdfLabelDrawSizeMm(
+    exportBounds,
+    trimLayout,
+    item.shape
+  );
 
-  const x = (pageW - drawW) / 2;
-  const y = topMargin + Math.max(0, (maxH - drawH) / 2);
+  const fitScale = Math.min(1, maxW / drawWmm, maxH / drawHmm);
+  drawWmm *= fitScale;
+  drawHmm *= fitScale;
+
+  const x = (pageW - drawWmm) / 2;
+  const y = topMargin + Math.max(0, (maxH - drawHmm) / 2);
   const format = imgData.startsWith('data:image/png') ? 'PNG' : 'JPEG';
-  pdf.addImage(imgData, format, x, y, drawW, drawH);
+  pdf.addImage(imgData, format, x, y, drawWmm, drawHmm);
 }
 
 /**
