@@ -11,7 +11,7 @@ import OrderDownloadScreen from './components/OrderDownloadScreen';
 import { calculateTotal } from './config/pricing';
 import { DEFAULT_LABEL_SHEET_ID } from './config/labelSheets';
 import { DEFAULT_IMAGE_SCALE, clampImageScale } from './config/imageTransform';
-import { imageElementToDataUrl, readBlobAsDataUrl } from './utils/renderLabelExport';
+import { imageElementToDataUrl, readBlobAsDataUrl, capturePrintSnapshots, PREVIEW_LOGICAL_SIZE } from './utils/renderLabelExport';
 
 export default function App() {
   const canvasRef = useRef(null);
@@ -157,13 +157,19 @@ export default function App() {
     uploadedFileRef.current = file || null;
 
     if (file) {
-      readBlobAsDataUrl(file).then((dataUrl) => {
+      try {
+        const dataUrl = imageElementToDataUrl(imgElement);
         uploadedImageDataUrlRef.current = dataUrl;
         setUploadedImageDataUrl(dataUrl);
-      }).catch(() => {
-        uploadedImageDataUrlRef.current = null;
-        setUploadedImageDataUrl(null);
-      });
+      } catch {
+        readBlobAsDataUrl(file).then((dataUrl) => {
+          uploadedImageDataUrlRef.current = dataUrl;
+          setUploadedImageDataUrl(dataUrl);
+        }).catch(() => {
+          uploadedImageDataUrlRef.current = null;
+          setUploadedImageDataUrl(null);
+        });
+      }
     } else {
       try {
         const dataUrl = imageElementToDataUrl(imgElement);
@@ -225,15 +231,16 @@ export default function App() {
     let imageDataUrl = null;
     if (!isTextOnly) {
       try {
-        if (uploadedFileRef.current) {
-          imageDataUrl = await readBlobAsDataUrl(uploadedFileRef.current);
+        if (uploadedImage) {
+          // Match preview canvas pixels (respects browser decode / orientation).
+          imageDataUrl = imageElementToDataUrl(uploadedImage);
         } else if (uploadedImageDataUrlRef.current) {
           imageDataUrl = uploadedImageDataUrlRef.current;
+        } else if (uploadedFileRef.current) {
+          imageDataUrl = await readBlobAsDataUrl(uploadedFileRef.current);
         } else if (imageUrl) {
           const blob = await fetch(imageUrl).then((res) => res.blob());
           imageDataUrl = await readBlobAsDataUrl(blob);
-        } else if (uploadedImage) {
-          imageDataUrl = imageElementToDataUrl(uploadedImage);
         }
       } catch {
         setToastMessage('Could not save your uploaded image. Please re-upload and try again.');
@@ -250,17 +257,7 @@ export default function App() {
     const materialForPricing = hasFoilBorder ? selectedMaterial : null;
     const { unitPrice, total } = calculateTotal(materialForPricing, quantity, uvEnabled);
 
-    // Snapshot the live preview first — this is exactly what the customer saw.
-    let thumbnail = '';
-    if (canvasRef.current) {
-      try {
-        thumbnail = canvasRef.current.toDataURL('image/png');
-      } catch {
-        thumbnail = '';
-      }
-    }
-
-    const newItem = {
+    const cartItemDraft = {
       shape: selectedShape,
       material: selectedMaterial,
       textSegments: textSegments.map((segment) => ({
@@ -275,7 +272,32 @@ export default function App() {
       labelSheetId: selectedLabelSheet,
       quantity,
       unitPrice,
-      totalPrice: total,
+      totalPrice: total
+    };
+
+    let printSnapshots = {};
+    try {
+      printSnapshots = await capturePrintSnapshots(cartItemDraft, {
+        logicalSize: PREVIEW_LOGICAL_SIZE,
+        scaleFactor: 1
+      });
+    } catch (err) {
+      console.error('Print snapshot capture failed:', err);
+    }
+
+    // Snapshot the live preview for receipt thumbnail.
+    let thumbnail = '';
+    if (canvasRef.current) {
+      try {
+        thumbnail = canvasRef.current.toDataURL('image/png');
+      } catch {
+        thumbnail = '';
+      }
+    }
+
+    const newItem = {
+      ...cartItemDraft,
+      ...printSnapshots,
       thumbnail
     };
 

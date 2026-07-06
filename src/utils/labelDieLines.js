@@ -392,6 +392,53 @@ export function getBleedDieLineData(bleedImg, trimDieImg, maxTargetSize = 420) {
   return data;
 }
 
+/** Fill everything inside the bleed line with solid black (trim + margin + foil gaps). */
+export function drawBleedInteriorBlack(ctx, dieData, bleedLayout, color = '#000000') {
+  if (!dieData?.bleedMaskCanvas || !bleedLayout) return;
+
+  const bleedMask = dieData.bleedMaskCanvas;
+  const off = document.createElement('canvas');
+  off.width = bleedMask.width;
+  off.height = bleedMask.height;
+  const offCtx = off.getContext('2d');
+  offCtx.fillStyle = color;
+  offCtx.fillRect(0, 0, off.width, off.height);
+  offCtx.globalCompositeOperation = 'destination-in';
+  offCtx.drawImage(bleedMask, 0, 0);
+  ctx.drawImage(off, bleedLayout.x, bleedLayout.y, bleedLayout.w, bleedLayout.h);
+}
+
+/** @deprecated Prefer drawBleedInteriorBlack for foil labels. Ring-only variant. */
+export function drawBleedMarginBlack(ctx, dieData, bleedLayout, trimLayout, color = '#000000') {
+  if (!dieData?.hasBleed || !dieData.bleedMaskCanvas || !dieData.maskCanvas || !bleedLayout || !trimLayout) {
+    return;
+  }
+
+  const bleedMask = dieData.bleedMaskCanvas;
+  const trimMask = dieData.maskCanvas;
+  const off = document.createElement('canvas');
+  off.width = bleedMask.width;
+  off.height = bleedMask.height;
+  const offCtx = off.getContext('2d');
+
+  offCtx.fillStyle = color;
+  offCtx.fillRect(0, 0, off.width, off.height);
+  offCtx.globalCompositeOperation = 'destination-in';
+  offCtx.drawImage(bleedMask, 0, 0);
+
+  const scaleX = off.width / bleedLayout.w;
+  const scaleY = off.height / bleedLayout.h;
+  const trimX = (trimLayout.x - bleedLayout.x) * scaleX;
+  const trimY = (trimLayout.y - bleedLayout.y) * scaleY;
+  const trimW = trimLayout.w * scaleX;
+  const trimH = trimLayout.h * scaleY;
+
+  offCtx.globalCompositeOperation = 'destination-out';
+  offCtx.drawImage(trimMask, 0, 0, trimMask.width, trimMask.height, trimX, trimY, trimW, trimH);
+
+  ctx.drawImage(off, bleedLayout.x, bleedLayout.y, bleedLayout.w, bleedLayout.h);
+}
+
 export function drawImageWithSampleMask(ctx, userImg, maskCanvas, layout, imgDraw) {
   const off = document.createElement('canvas');
   off.width = maskCanvas.width;

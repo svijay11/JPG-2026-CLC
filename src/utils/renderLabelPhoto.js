@@ -2,7 +2,8 @@ import { shapeHasBleedAssets } from '../config/shapes';
 
 /**
  * Resolve bounds + clip for uploaded photos (preview + PDF export).
- * Bleed shapes must use bleedMaskCanvas with bleedLayout — never trim mask at bleed size.
+ * Foil-border labels (standard finish): photo stays inside the frame window.
+ * Full bleed / designer print: photo extends to the bleed edge.
  */
 export function resolveUploadedPhotoPlacement({
   shape,
@@ -11,12 +12,26 @@ export function resolveUploadedPhotoPlacement({
   labelLayout,
   foilClipData,
   uploadedImage,
-  noEmbellishments,
   hasFoilBorder,
   fullBleed
 }) {
   const hasBleed = Boolean(dieData?.hasBleed && bleedLayoutRef);
-  const useBleedClip = Boolean(hasBleed && uploadedImage && (noEmbellishments || shapeHasBleedAssets(shape)));
+  const useFoilPhotoClip = Boolean(hasFoilBorder && !fullBleed && foilClipData?.photoClipMask);
+
+  if (useFoilPhotoClip) {
+    return {
+      bounds: labelLayout,
+      coverFit: false,
+      clipMask: foilClipData.photoClipMask,
+      clipLayout: labelLayout
+    };
+  }
+
+  const useBleedClip = Boolean(
+    hasBleed &&
+    uploadedImage &&
+    (fullBleed || (shapeHasBleedAssets(shape) && !hasFoilBorder))
+  );
 
   if (useBleedClip) {
     const clipMask = dieData.bleedMaskCanvas;
@@ -31,11 +46,10 @@ export function resolveUploadedPhotoPlacement({
     };
   }
 
-  const useFoilPhotoClip = Boolean(hasFoilBorder && !fullBleed && foilClipData?.photoClipMask);
   return {
     bounds: labelLayout,
     coverFit: false,
-    clipMask: useFoilPhotoClip ? foilClipData.photoClipMask : dieData?.maskCanvas,
+    clipMask: dieData?.maskCanvas,
     clipLayout: labelLayout
   };
 }
@@ -50,7 +64,9 @@ export function computeImageDraw(activeImg, {
 }) {
   if (!activeImg || !bounds) return null;
 
-  const imgRatio = activeImg.width / activeImg.height;
+  const imgW = activeImg.naturalWidth || activeImg.width;
+  const imgH = activeImg.naturalHeight || activeImg.height;
+  const imgRatio = imgW / imgH;
   const boundsRatio = bounds.w / bounds.h;
   let drawW;
   let drawH;
@@ -83,4 +99,26 @@ export function computeImageDraw(activeImg, {
   const finalY = bounds.y + (bounds.h - finalH) / 2 + (uploadedImage ? scaledOffset.y : 0);
 
   return { x: finalX, y: finalY, w: finalW, h: finalH };
+}
+
+/** Foil-border labels: black fill inside bleed (trim area + margin + gaps under foil art). */
+export function shouldDrawFoilBlackBase({
+  dieData,
+  bleedLayoutRef,
+  hasFoilBorder,
+  fullBleed,
+  uploadedImage
+}) {
+  return Boolean(
+    dieData?.hasBleed &&
+    bleedLayoutRef &&
+    uploadedImage &&
+    hasFoilBorder &&
+    !fullBleed
+  );
+}
+
+/** @deprecated Use shouldDrawFoilBlackBase */
+export function shouldDrawBleedMarginBlack(props) {
+  return shouldDrawFoilBlackBase(props);
 }

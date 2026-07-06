@@ -3,7 +3,7 @@ import { SHAPES, shapeIsTextOnly, getShapeSize } from '../config/shapes';
 import { MATERIALS } from '../config/pricing';
 import { getRibbonColor } from '../config/ribbonColors';
 import { getLabelSheet } from '../config/labelSheets';
-import { renderLabelExportCanvas, cropCanvasToBounds, computePdfLabelDrawSizeMm, PREVIEW_LOGICAL_SIZE } from './renderLabelExport';
+import { renderLabelExportCanvasPair, cropCanvasToBounds, computePdfLabelDrawSizeMm, PREVIEW_LOGICAL_SIZE } from './renderLabelExport';
 
 const SHOP_NAME = 'Idyll Time Wines';
 const SHOP_URL = 'idylltimewines.com';
@@ -260,11 +260,15 @@ function drawReceiptPage(pdf, items, orderMeta) {
   drawTotalRow('Order total', orderTotal, true);
 }
 
-async function addPrintReadyPage(pdf, item, { noEmbellishments = false } = {}) {
+async function addPrintReadyPageFromImageData(pdf, imgData, exportBounds, trimLayout, item, { noEmbellishments = false } = {}) {
   pdf.addPage('letter', 'portrait');
 
   const pageW = pdf.internal.pageSize.getWidth();
-  const topMargin = noEmbellishments ? 18 : 14;
+  const pageH = pdf.internal.pageSize.getHeight();
+  const topMargin = 14;
+  const margin = 14;
+  const maxW = pageW - margin * 2;
+  const maxH = pageH - topMargin - margin;
 
   if (noEmbellishments) {
     pdf.setFont('helvetica', 'normal');
@@ -272,25 +276,6 @@ async function addPrintReadyPage(pdf, item, { noEmbellishments = false } = {}) {
     pdf.setTextColor(90, 90, 90);
     pdf.text('Designer print file -- no embellishments (photo, text, and bleed only)', 14, 10);
   }
-
-  const { canvas, exportBounds, trimLayout } = await renderLabelExportCanvas(item, {
-    noEmbellishments,
-    logicalSize: PREVIEW_LOGICAL_SIZE,
-    scaleFactor: 1
-  });
-  const cropped = cropCanvasToBounds(canvas, exportBounds);
-
-  let imgData;
-  try {
-    imgData = cropped.toDataURL('image/jpeg', 0.92);
-  } catch {
-    imgData = cropped.toDataURL('image/png');
-  }
-
-  const pageH = pdf.internal.pageSize.getHeight();
-  const margin = 14;
-  const maxW = pageW - margin * 2;
-  const maxH = pageH - topMargin - margin;
 
   let { width: drawWmm, height: drawHmm } = computePdfLabelDrawSizeMm(
     exportBounds,
@@ -306,6 +291,46 @@ async function addPrintReadyPage(pdf, item, { noEmbellishments = false } = {}) {
   const y = topMargin + Math.max(0, (maxH - drawHmm) / 2);
   const format = imgData.startsWith('data:image/png') ? 'PNG' : 'JPEG';
   pdf.addImage(imgData, format, x, y, drawWmm, drawHmm);
+}
+
+async function addPrintReadyPageFromRender(pdf, renderResult, item, { noEmbellishments = false } = {}) {
+  const cropped = cropCanvasToBounds(renderResult.canvas, renderResult.exportBounds);
+  let imgData;
+  try {
+    imgData = cropped.toDataURL('image/png');
+  } catch {
+    imgData = cropped.toDataURL('image/jpeg', 0.92);
+  }
+  await addPrintReadyPageFromImageData(
+    pdf,
+    imgData,
+    renderResult.exportBounds,
+    renderResult.trimLayout,
+    item,
+    { noEmbellishments }
+  );
+}
+
+async function addPrintReadyPage(pdf, item, { noEmbellishments = false } = {}) {
+  const storedUrl = noEmbellishments ? item.designerPrintDataUrl : item.customerPrintDataUrl;
+  if (storedUrl && item.printExportBounds && item.printTrimLayout) {
+    await addPrintReadyPageFromImageData(
+      pdf,
+      storedUrl,
+      item.printExportBounds,
+      item.printTrimLayout,
+      item,
+      { noEmbellishments }
+    );
+    return;
+  }
+
+  const pair = await renderLabelExportCanvasPair(item, {
+    logicalSize: PREVIEW_LOGICAL_SIZE,
+    scaleFactor: 1
+  });
+  const renderResult = noEmbellishments ? pair.designer : pair.customer;
+  await addPrintReadyPageFromRender(pdf, renderResult, item, { noEmbellishments });
 }
 
 /**

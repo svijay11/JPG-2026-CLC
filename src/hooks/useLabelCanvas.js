@@ -9,13 +9,14 @@ import {
   getDieLineData,
   getFoilBorderClipData,
   DIE_LINE_COLORS,
-  drawBleedGuideLine
+  drawBleedGuideLine,
+  drawBleedInteriorBlack
 } from '../utils/labelDieLines';
 import { drawTextAlongPath, mapShapePathToCanvas } from '../utils/curvedText';
 import { drawTintedRibbon } from '../utils/ribbonTint';
 import { getRibbonColor } from '../config/ribbonColors';
 import { isFullBleedMaterial } from '../config/pricing';
-import { resolveUploadedPhotoPlacement, computeImageDraw } from '../utils/renderLabelPhoto';
+import { resolveUploadedPhotoPlacement, computeImageDraw, shouldDrawFoilBlackBase } from '../utils/renderLabelPhoto';
 
 export const useLabelCanvas = (canvasRef, {
   selectedShape,
@@ -145,9 +146,8 @@ export const useLabelCanvas = (canvasRef, {
     const hasFoilBorder = shapeHasFoilBorder(shape) && Boolean(foilBorderImage);
     const fullBleed = isFullBleedMaterial(selectedMaterial);
     const showFoilBorder = hasFoilBorder && !fullBleed;
-    // Photo + cyan bleed guide always use bleed assets when available; foil frame draws on top.
-    const useBleedPhoto = usesBleedDieLines && Boolean(uploadedImage);
-    const showBleedGuide = useBleedPhoto;
+    // Cyan bleed guide when bleed assets exist; photo framing follows resolveUploadedPhotoPlacement.
+    const showBleedGuide = usesBleedDieLines && Boolean(uploadedImage);
 
     let labelLayout = sampleImage ? computeSampleLabelLayout(sampleImage, maxTargetSize) : null;
     let trimLayout = labelLayout;
@@ -194,7 +194,6 @@ export const useLabelCanvas = (canvasRef, {
         labelLayout,
         foilClipData,
         uploadedImage,
-        noEmbellishments: false,
         hasFoilBorder,
         fullBleed
       })
@@ -211,25 +210,16 @@ export const useLabelCanvas = (canvasRef, {
           uploadedImage: true
         });
       } else {
-      const imgW = activeImg.width;
-      const imgH = activeImg.height;
+      const imgW = activeImg.naturalWidth || activeImg.width;
+      const imgH = activeImg.naturalHeight || activeImg.height;
       const imgRatio = imgW / imgH;
 
       let drawW, drawH;
 
       if (isSampleLabel || usesSampleDieLines || usesBleedDieLines) {
-        const bounds = useBleedPhoto ? bleedLayoutRef : labelLayout;
+        const bounds = labelLayout;
         const boundsRatio = bounds.w / bounds.h;
-        const coverFit = useBleedPhoto;
-        if (coverFit) {
-          if (imgRatio > boundsRatio) {
-            drawH = bounds.h;
-            drawW = drawH * imgRatio;
-          } else {
-            drawW = bounds.w;
-            drawH = drawW / imgRatio;
-          }
-        } else if (imgRatio > boundsRatio) {
+        if (imgRatio > boundsRatio) {
           drawH = bounds.h;
           drawW = drawH * imgRatio;
         } else {
@@ -267,7 +257,7 @@ export const useLabelCanvas = (canvasRef, {
       }
 
       if (isSampleLabel || usesSampleDieLines || usesBleedDieLines) {
-        const bounds = useBleedPhoto ? bleedLayoutRef : labelLayout;
+        const bounds = labelLayout;
         finalX = bounds.x + (bounds.w - finalW) / 2;
         finalY = bounds.y + (bounds.h - finalH) / 2;
       } else {
@@ -301,6 +291,18 @@ export const useLabelCanvas = (canvasRef, {
           : rect));
 
     // --- RENDER STACK ---
+
+    const useFoilBlackBase = shouldDrawFoilBlackBase({
+      dieData,
+      bleedLayoutRef,
+      hasFoilBorder,
+      fullBleed,
+      uploadedImage
+    });
+
+    if (useFoilBlackBase) {
+      drawBleedInteriorBlack(ctx, dieData, bleedLayoutRef);
+    }
 
     // Layer 1: Background Fill (legacy template path only)
     if (!isSampleLabel && !usesSampleDieLines) {

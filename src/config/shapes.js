@@ -51,8 +51,8 @@ export const SHAPES = [
     sampleImage: '/samples/squircle.png',
     bleedImage: '/samples/squircle-bleed.png',
     dieLineImage: '/samples/squircle-dieline.png',
-    description: '4CP, 3.25″×2.75″',
-    printSizeInches: { width: 3.25, height: 2.75 },
+    description: '4CP, 2.75″×3.25″',
+    printSizeInches: { width: 2.75, height: 3.25 },
     tagline: 'Upload your photo, add curved custom text, and optionally add UV coating.',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
