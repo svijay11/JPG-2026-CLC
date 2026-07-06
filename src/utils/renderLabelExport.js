@@ -10,7 +10,7 @@ import {
 import { drawTextAlongPath, mapShapePathToCanvas } from '../utils/curvedText';
 import { drawTintedRibbon } from '../utils/ribbonTint';
 import { getRibbonColor } from '../config/ribbonColors';
-import { isFullBleedMaterial } from '../config/pricing';
+import { isFullBleedMaterial, FULL_BLEED_MATERIAL_ID } from '../config/pricing';
 
 const PREVIEW_LOGICAL_SIZE = 600;
 const PREVIEW_MAX_TARGET = 420;
@@ -53,23 +53,40 @@ async function loadShapeAssets(shape) {
 export async function renderLabelExportCanvas(item, options = {}) {
   const {
     logicalSize = PREVIEW_LOGICAL_SIZE * 2,
-    scaleFactor = logicalSize / PREVIEW_LOGICAL_SIZE
+    scaleFactor = logicalSize / PREVIEW_LOGICAL_SIZE,
+    noEmbellishments = false
   } = options;
 
   const maxTargetSize = PREVIEW_MAX_TARGET * scaleFactor;
   const shape = SHAPES.find((s) => s.id === item.shape) || SHAPES[0];
-  const materialId = item.material || 'standard-4cp';
+  const isTextOnlyShape = shapeIsTextOnly(shape);
+  const materialId = noEmbellishments
+    ? FULL_BLEED_MATERIAL_ID
+    : (item.material || 'standard-4cp');
   const textSegments = item.textSegments || [];
   const imageOffset = item.imageOffset || { x: 0, y: 0 };
+  const imageScale = item.imageScale ?? 1;
   const scaledOffset = {
     x: imageOffset.x * scaleFactor,
     y: imageOffset.y * scaleFactor
   };
-  const uvEnabled = Boolean(item.uvEnabled);
+  const uvEnabled = noEmbellishments ? false : Boolean(item.uvEnabled);
   const ribbonColorId = item.ribbonColorId;
 
   const assets = await loadShapeAssets(shape);
-  let uploadedImage = await loadImageFromDataUrl(item.imageDataUrl);
+  let uploadedImage = null;
+  if (item.imageDataUrl) {
+    uploadedImage = await loadImageFromDataUrl(item.imageDataUrl);
+  }
+
+  if (!isTextOnlyShape) {
+    if (!item.imageDataUrl) {
+      throw new Error('This label is missing the saved upload image.');
+    }
+    if (!uploadedImage) {
+      throw new Error('Could not load the saved upload image for this label.');
+    }
+  }
 
   const canvas = document.createElement('canvas');
   canvas.width = logicalSize;
@@ -119,11 +136,10 @@ export async function renderLabelExportCanvas(item, options = {}) {
     context.scale(shapeScale, shapeScale);
   };
 
-  const isTextOnlyShape = shapeIsTextOnly(shape);
   const usesBleedDieLines = shapeHasBleedAssets(shape) && Boolean(bleedImage && dieLineImage);
   const hasFoilBorder = shapeHasFoilBorder(shape) && Boolean(foilBorderImage);
-  const fullBleed = isFullBleedMaterial(materialId);
-  const showFoilBorder = hasFoilBorder && !fullBleed;
+  const fullBleed = noEmbellishments || isFullBleedMaterial(materialId);
+  const showFoilBorder = !noEmbellishments && hasFoilBorder && !fullBleed;
   const forceBleedClip = usesBleedDieLines && Boolean(uploadedImage || isTextOnlyShape);
 
   let labelLayout = sampleImage
@@ -175,8 +191,8 @@ export async function renderLabelExportCanvas(item, options = {}) {
     }
   }
 
-  const activeImg = uploadedImage || sampleImage;
-  const isSampleLabel = !uploadedImage && sampleImage && !shape.clipSampleToShape;
+  const activeImg = isTextOnlyShape ? sampleImage : uploadedImage;
+  const isSampleLabel = !isTextOnlyShape && !uploadedImage && sampleImage && !shape.clipSampleToShape;
   let imgDraw = null;
 
   if (activeImg) {
@@ -207,9 +223,14 @@ export async function renderLabelExportCanvas(item, options = {}) {
       drawH = drawW / imgRatio;
     }
 
-    const finalX = bounds.x + (bounds.w - drawW) / 2 + (uploadedImage ? scaledOffset.x : 0);
-    const finalY = bounds.y + (bounds.h - drawH) / 2 + (uploadedImage ? scaledOffset.y : 0);
-    imgDraw = { x: finalX, y: finalY, w: drawW, h: drawH };
+    const finalX = bounds.x + (bounds.w - drawW * imageScale) / 2 + (uploadedImage ? scaledOffset.x : 0);
+    const finalY = bounds.y + (bounds.h - drawH * imageScale) / 2 + (uploadedImage ? scaledOffset.y : 0);
+    imgDraw = {
+      x: finalX,
+      y: finalY,
+      w: drawW * (uploadedImage ? imageScale : 1),
+      h: drawH * (uploadedImage ? imageScale : 1)
+    };
   }
 
   const overlayRect = trimLayout
@@ -221,10 +242,11 @@ export async function renderLabelExportCanvas(item, options = {}) {
 
   if (activeImg && imgDraw) {
     if (usesBleedDieLines && dieData && (uploadedImage || isTextOnlyShape)) {
-      const clipMask = forceBleedClip
+      const useBleedClip = noEmbellishments || forceBleedClip;
+      const clipMask = useBleedClip
         ? (dieData.bleedMaskCanvas || dieData.maskCanvas)
         : (foilClipData?.photoClipMask || dieData.maskCanvas);
-      const clipLayout = forceBleedClip && dieData.hasBleed ? bleedLayoutRef : labelLayout;
+      const clipLayout = useBleedClip && dieData.hasBleed ? bleedLayoutRef : labelLayout;
       if (isTextOnlyShape) {
         const ribbonColor = getRibbonColor(ribbonColorId);
         drawTintedRibbon(ctx, activeImg, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h, ribbonColor.color, ribbonColor.id);

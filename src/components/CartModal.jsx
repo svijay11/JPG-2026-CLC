@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SHAPES } from '../config/shapes';
 import { MATERIALS } from '../config/pricing';
 import { getLabelSheet } from '../config/labelSheets';
+import CartItemPreview from './CartItemPreview';
 
 export default function CartModal({
   isOpen,
@@ -101,11 +102,7 @@ export default function CartModal({
                     <div key={index} className="flex space-x-4 p-3 border border-gray-100 rounded-lg bg-gray-50/50">
                       {/* Canvas Screenshot Preview */}
                       <div className="w-20 h-20 bg-gray-900 border border-gray-200 rounded overflow-hidden flex items-center justify-center flex-shrink-0">
-                        <img 
-                          src={item.thumbnail} 
-                          alt="Custom Wine Label Preview" 
-                          className="w-full h-full object-cover"
-                        />
+                        <CartItemPreview item={item} className="w-full h-full" />
                       </div>
 
                       {/* Details */}

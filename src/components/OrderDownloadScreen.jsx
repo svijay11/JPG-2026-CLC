@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SHAPES } from '../config/shapes';
 import { MATERIALS } from '../config/pricing';
 import { exportAllCartItemsToPdf, exportCartItemToPdf } from '../utils/exportOrderPdf';
+import CartItemPreview from './CartItemPreview';
 
 export default function OrderDownloadScreen({
   orderItems,
@@ -71,9 +72,7 @@ export default function OrderDownloadScreen({
             return (
               <div key={index} className="flex items-center gap-4 p-3 border border-gray-100 rounded-lg bg-gray-50/50">
                 <div className="w-16 h-16 bg-gray-900 rounded overflow-hidden flex-shrink-0">
-                  {item.thumbnail && (
-                    <img src={item.thumbnail} alt="" className="w-full h-full object-cover" />
-                  )}
+                  <CartItemPreview item={item} className="w-full h-full" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-luxury-charcoal truncate">{shapeName}</p>

@@ -174,6 +174,17 @@ export const SHAPES = [
   }
 ];
 
+/** Physical dimensions only — strips material prefix from description (e.g. "4CP, 2.5"x3.9"" → "2.5"x3.9""). */
+export function getShapeSize(shapeOrId) {
+  const shape = typeof shapeOrId === 'string'
+    ? SHAPES.find((s) => s.id === shapeOrId)
+    : shapeOrId;
+  if (!shape?.description) return '';
+  const comma = shape.description.indexOf(',');
+  if (comma === -1) return shape.description.trim();
+  return shape.description.slice(comma + 1).trim();
+}
+
 export function shapeHasFoilBorder(shapeOrId) {
   const shape = typeof shapeOrId === 'string'
     ? SHAPES.find((s) => s.id === shapeOrId)

@@ -1,4 +1,10 @@
 import React, { useRef, useState } from 'react';
+import {
+  MIN_IMAGE_SCALE,
+  MAX_IMAGE_SCALE,
+  IMAGE_SCALE_STEP,
+  clampImageScale
+} from '../config/imageTransform';
 
 export default function ImageUploader({ 
   uploadedImage, 
@@ -7,6 +13,8 @@ export default function ImageUploader({
   onImageRemoved, 
   isRepositioning, 
   onToggleReposition,
+  imageScale,
+  onImageScaleChange,
   disabled 
 }) {
   const fileInputRef = useRef(null);
@@ -25,7 +33,7 @@ export default function ImageUploader({
     const objectUrl = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      onImageUploaded(img, objectUrl);
+      onImageUploaded(img, objectUrl, file);
     };
     img.onerror = () => {
       setError('Failed to load image. File may be corrupted.');
@@ -153,7 +161,7 @@ export default function ImageUploader({
 
       {/* Reposition Mode Button */}
       {uploadedImage && (
-        <div className="pt-1">
+        <div className="pt-1 space-y-3">
           <button
             onClick={onToggleReposition}
             className={`w-full py-2 px-4 rounded-md text-xs font-semibold tracking-wide border-2 transition-all flex items-center justify-center space-x-2
@@ -179,6 +187,50 @@ export default function ImageUploader({
               </>
             )}
           </button>
+
+          {isRepositioning && (
+            <div className="p-3 bg-gray-50 border border-gray-100 rounded-lg space-y-2">
+              <div className="flex items-center justify-between">
+                <label htmlFor="image-scale-slider" className="text-xs font-semibold text-gray-500">
+                  Image size
+                </label>
+                <span className="text-xs font-bold text-luxury-charcoal">
+                  {Math.round(imageScale * 100)}%
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onImageScaleChange(clampImageScale(imageScale - IMAGE_SCALE_STEP))}
+                  className="w-8 h-8 border border-gray-200 rounded-md text-sm font-bold hover:border-luxury-gold"
+                  aria-label="Make image smaller"
+                >
+                  −
+                </button>
+                <input
+                  id="image-scale-slider"
+                  type="range"
+                  min={MIN_IMAGE_SCALE}
+                  max={MAX_IMAGE_SCALE}
+                  step={IMAGE_SCALE_STEP}
+                  value={imageScale}
+                  onChange={(e) => onImageScaleChange(clampImageScale(parseFloat(e.target.value)))}
+                  className="flex-1 accent-luxury-gold"
+                />
+                <button
+                  type="button"
+                  onClick={() => onImageScaleChange(clampImageScale(imageScale + IMAGE_SCALE_STEP))}
+                  className="w-8 h-8 border border-gray-200 rounded-md text-sm font-bold hover:border-luxury-gold"
+                  aria-label="Make image larger"
+                >
+                  +
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-400 leading-relaxed">
+                Drag on the preview to pan. Use the slider or scroll wheel to resize — width and height scale together.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

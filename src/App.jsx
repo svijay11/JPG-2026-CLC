@@ -10,7 +10,8 @@ import { DEFAULT_RIBBON_COLOR_ID } from './config/ribbonColors';
 import OrderDownloadScreen from './components/OrderDownloadScreen';
 import { calculateTotal } from './config/pricing';
 import { DEFAULT_LABEL_SHEET_ID } from './config/labelSheets';
-import { imageElementToDataUrl } from './utils/renderLabelExport';
+import { DEFAULT_IMAGE_SCALE, clampImageScale } from './config/imageTransform';
+import { imageElementToDataUrl, renderLabelExportCanvas } from './utils/renderLabelExport';
 
 export default function App() {
   const canvasRef = useRef(null);
@@ -26,6 +27,8 @@ export default function App() {
   const [imageUrl, setImageUrl] = useState(null);
   
   const [imageOffset, setImageOffset] = useState({ x: 0, y: 0 });
+  const [imageScale, setImageScale] = useState(DEFAULT_IMAGE_SCALE);
+  const [uploadedImageDataUrl, setUploadedImageDataUrl] = useState(null);
   const [textSegments, setTextSegments] = useState([]);
   const [repositionMode, setRepositionMode] = useState('none'); // 'none', 'image', 'text'
   const [activeTextId, setActiveTextId] = useState(null);
@@ -96,6 +99,8 @@ export default function App() {
       setUploadedImage(null);
       setImageUrl(null);
       setImageOffset({ x: 0, y: 0 });
+      setImageScale(DEFAULT_IMAGE_SCALE);
+      setUploadedImageDataUrl(null);
     }
     if (shapeIsTextOnly(shape) && textSegments.length === 0) {
       setTextSegments([{
@@ -120,6 +125,7 @@ export default function App() {
     dieLineImage,
     bleedImage,
     imageOffset,
+    imageScale,
     textSegments,
     repositionMode,
     ribbonColorId,
@@ -135,14 +141,23 @@ export default function App() {
   }, [repositionMode]);
 
   // --- EVENT HANDLERS ---
-  const handleImageUploaded = (imgElement, objectUrl) => {
+  const handleImageUploaded = (imgElement, objectUrl, file) => {
     // Revoke old URL if it exists
     if (imageUrl) {
       URL.revokeObjectURL(imageUrl);
     }
     setUploadedImage(imgElement);
     setImageUrl(objectUrl);
-    setImageOffset({ x: 0, y: 0 }); // Reset panning offset on new uploads
+    setImageOffset({ x: 0, y: 0 });
+    setImageScale(DEFAULT_IMAGE_SCALE);
+
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => setUploadedImageDataUrl(reader.result);
+      reader.readAsDataURL(file);
+    } else {
+      setUploadedImageDataUrl(imageElementToDataUrl(imgElement));
+    }
   };
 
   const handleImageRemoved = () => {
@@ -152,6 +167,8 @@ export default function App() {
     setUploadedImage(null);
     setImageUrl(null);
     setImageOffset({ x: 0, y: 0 });
+    setImageScale(DEFAULT_IMAGE_SCALE);
+    setUploadedImageDataUrl(null);
     if (repositionMode === 'image') {
       setRepositionMode('none'); // Cancel reposition mode if active
     }
@@ -167,7 +184,7 @@ export default function App() {
     }));
   };
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     const activeShape = SHAPES.find((s) => s.id === selectedShape);
     const isTextOnly = shapeIsTextOnly(activeShape);
 
@@ -177,51 +194,65 @@ export default function App() {
         setToastMessage('Please add your message on the ribbon before adding to cart.');
         return;
       }
-    } else if (!uploadedImage) {
+    } else if (!uploadedImage || !(uploadedImage.complete && uploadedImage.naturalWidth)) {
       setToastMessage('Please upload an image to complete your customized label design.');
       return;
     }
 
-    // 2. Capture canvas content as a data URL for thumbnail rendering in cart
-    let thumbnail = '';
-    if (canvasRef.current) {
-      thumbnail = canvasRef.current.toDataURL('image/png');
+    let imageDataUrl = null;
+    if (uploadedImage) {
+      try {
+        imageDataUrl = imageElementToDataUrl(uploadedImage);
+      } catch {
+        setToastMessage('Could not save your uploaded image. Please re-upload and try again.');
+        return;
+      }
     }
 
-    // 3. Compute price breakdown
     const hasFoilBorder = shapeHasFoilBorder(activeShape);
     const materialForPricing = hasFoilBorder ? selectedMaterial : null;
     const { unitPrice, total } = calculateTotal(materialForPricing, quantity, uvEnabled);
 
-    // 4. Append item to cart array
-    let imageDataUrl = null;
-    if (uploadedImage) {
-      imageDataUrl = imageElementToDataUrl(uploadedImage);
-    }
-
     const newItem = {
       shape: selectedShape,
       material: selectedMaterial,
-      textSegments,
+      textSegments: textSegments.map((segment) => ({ ...segment })),
       uvEnabled,
       ribbonColorId: shapeIsTextOnly(activeShape) ? ribbonColorId : null,
       imageDataUrl,
       imageOffset: { ...imageOffset },
+      imageScale,
       labelSheetId: selectedLabelSheet,
       quantity,
       unitPrice,
       totalPrice: total,
-      thumbnail
+      thumbnail: ''
     };
 
-    setCart((prev) => [...prev, newItem]);
+    let thumbnail = '';
+    try {
+      await document.fonts.ready;
+      const exportCanvas = await renderLabelExportCanvas(newItem, {
+        logicalSize: 480,
+        scaleFactor: 480 / 600
+      });
+      thumbnail = exportCanvas.toDataURL('image/png');
+    } catch {
+      if (canvasRef.current) {
+        thumbnail = canvasRef.current.toDataURL('image/png');
+      }
+    }
 
-    // 5. Reset customizing designer states back to standard defaults for the next order
+    setCart((prev) => [...prev, { ...newItem, thumbnail }]);
+
+    // Reset customizing designer states back to standard defaults for the next order
     setTextSegments([]);
     setActiveTextId(null);
     setUploadedImage(null);
     setImageUrl(null);
+    setUploadedImageDataUrl(null);
     setImageOffset({ x: 0, y: 0 });
+    setImageScale(DEFAULT_IMAGE_SCALE);
     setUvEnabled(false);
     setRibbonColorId(DEFAULT_RIBBON_COLOR_ID);
     setSelectedLabelSheet(DEFAULT_LABEL_SHEET_ID);
@@ -310,6 +341,8 @@ export default function App() {
         repositionMode={repositionMode}
         imageOffset={imageOffset}
         onImageOffsetChange={setImageOffset}
+        imageScale={imageScale}
+        onImageScaleChange={(value) => setImageScale(clampImageScale(value))}
         textSegments={textSegments}
         activeTextId={activeTextId}
         onTextSegmentOffsetChange={handleSetTextSegmentOffset}
@@ -334,6 +367,8 @@ export default function App() {
         onRepositionModeChange={setRepositionMode}
         imageOffset={imageOffset}
         onImageOffsetChange={setImageOffset}
+        imageScale={imageScale}
+        onImageScaleChange={(value) => setImageScale(clampImageScale(value))}
         hasTextOverflow={hasTextOverflow}
         quantity={quantity}
         onQuantityChange={setQuantity}

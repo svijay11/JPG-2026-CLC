@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { SHAPES, shapeIsTextOnly } from '../config/shapes';
+import { SHAPES, shapeIsTextOnly, getShapeSize } from '../config/shapes';
 import { MATERIALS } from '../config/pricing';
 import { getRibbonColor } from '../config/ribbonColors';
 import { getLabelSheet } from '../config/labelSheets';
@@ -83,7 +83,8 @@ function getItemOptions(item) {
   const materialName = material?.name || 'Standard 4CP — Original Border';
   lines.push(`Finish: ${materialName}`);
 
-  if (shape?.description) lines.push(`Size: ${shape.description}`);
+  const size = getShapeSize(shape);
+  if (size) lines.push(`Size: ${size}`);
 
   if (item.labelSheetId) {
     lines.push(`Label sheet: ${getLabelSheet(item.labelSheetId).name}`);
@@ -211,9 +212,20 @@ function drawReceiptPage(pdf, items, orderMeta) {
   drawTotalRow('Order total', orderTotal, true);
 }
 
-async function addPrintReadyPage(pdf, item) {
+async function addPrintReadyPage(pdf, item, { noEmbellishments = false } = {}) {
   pdf.addPage('letter', 'portrait');
-  const canvas = await renderLabelExportCanvas(item);
+
+  const pageW = pdf.internal.pageSize.getWidth();
+  const topMargin = noEmbellishments ? 18 : 14;
+
+  if (noEmbellishments) {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    pdf.setTextColor(90, 90, 90);
+    pdf.text('Designer print file -- no embellishments (photo, text, and bleed only)', 14, 10);
+  }
+
+  const canvas = await renderLabelExportCanvas(item, { noEmbellishments });
   let imgData;
   try {
     imgData = canvas.toDataURL('image/jpeg', 0.92);
@@ -221,11 +233,10 @@ async function addPrintReadyPage(pdf, item) {
     imgData = canvas.toDataURL('image/png');
   }
 
-  const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
   const margin = 14;
   const maxW = pageW - margin * 2;
-  const maxH = pageH - margin * 2;
+  const maxH = pageH - topMargin - margin;
   const aspect = canvas.width / canvas.height;
 
   let drawW = maxW;
@@ -236,13 +247,14 @@ async function addPrintReadyPage(pdf, item) {
   }
 
   const x = (pageW - drawW) / 2;
-  const y = (pageH - drawH) / 2;
+  const y = topMargin + Math.max(0, (maxH - drawH) / 2);
   const format = imgData.startsWith('data:image/png') ? 'PNG' : 'JPEG';
   pdf.addImage(imgData, format, x, y, drawW, drawH);
 }
 
 /**
- * Etsy-style order receipt (page 1) + print-ready label preview(s) (page 2+).
+ * Etsy-style order receipt (page 1) + print-ready label preview(s) (page 2+),
+ * plus a no-embellishments designer page for every item.
  */
 export async function exportOrderReceiptPdf(items, orderMeta = {}, filename = 'idyll-time-order.pdf') {
   await document.fonts.ready;
@@ -251,7 +263,8 @@ export async function exportOrderReceiptPdf(items, orderMeta = {}, filename = 'i
   drawReceiptPage(pdf, items, orderMeta);
 
   for (const item of items) {
-    await addPrintReadyPage(pdf, item);
+    await addPrintReadyPage(pdf, item, { noEmbellishments: false });
+    await addPrintReadyPage(pdf, item, { noEmbellishments: true });
   }
 
   pdf.save(filename);

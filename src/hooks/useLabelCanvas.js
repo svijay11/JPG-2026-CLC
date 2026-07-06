@@ -25,6 +25,7 @@ export const useLabelCanvas = (canvasRef, {
   dieLineImage,
   bleedImage,
   imageOffset,
+  imageScale = 1,
   textSegments,
   repositionMode,
   ribbonColorId,
@@ -235,13 +236,18 @@ export const useLabelCanvas = (canvasRef, {
       let finalX;
       let finalY;
 
+      if (uploadedImage) {
+        finalW = drawW * imageScale;
+        finalH = drawH * imageScale;
+      }
+
       if (isSampleLabel || usesSampleDieLines || usesBleedDieLines) {
         const bounds = useBleedPhoto ? bleedLayoutRef : labelLayout;
-        finalX = bounds.x + (bounds.w - drawW) / 2;
-        finalY = bounds.y + (bounds.h - drawH) / 2;
+        finalX = bounds.x + (bounds.w - finalW) / 2;
+        finalY = bounds.y + (bounds.h - finalH) / 2;
       } else {
-        finalX = rect.x + (rect.width - drawW) / 2;
-        finalY = rect.y + (rect.height - drawH) / 2;
+        finalX = rect.x + (rect.width - finalW) / 2;
+        finalY = rect.y + (rect.height - finalH) / 2;
       }
 
       if (isSample && shape.clipSampleToShape) {
@@ -542,7 +548,9 @@ export const useLabelCanvas = (canvasRef, {
       ctx.fillStyle = '#c9a84c';
       ctx.font = '14px "Josefin Sans", sans-serif';
       ctx.textAlign = 'center';
-      const textMsg = repositionMode === 'image' ? 'DRAG ON CANVAS TO PAN IMAGE' : 'DRAG ON CANVAS TO PAN TEXT';
+      const textMsg = repositionMode === 'image'
+        ? 'DRAG TO PAN · SCROLL OR SLIDER TO RESIZE'
+        : 'DRAG ON CANVAS TO PAN TEXT';
       ctx.fillText(textMsg, 300, 40);
 
       ctx.restore();
@@ -558,6 +566,7 @@ export const useLabelCanvas = (canvasRef, {
     dieLineImage,
     bleedImage,
     imageOffset,
+    imageScale,
     textSegments,
     repositionMode,
     ribbonColorId,

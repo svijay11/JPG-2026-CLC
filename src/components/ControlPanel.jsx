@@ -27,6 +27,8 @@ export default function ControlPanel({
   onRepositionModeChange,
   imageOffset,
   onImageOffsetChange,
+  imageScale,
+  onImageScaleChange,
   hasTextOverflow,
   quantity,
   onQuantityChange,
@@ -139,6 +141,8 @@ export default function ControlPanel({
                 onImageRemoved={onImageRemoved}
                 isRepositioning={repositionMode === 'image'}
                 onToggleReposition={() => onRepositionModeChange(repositionMode === 'image' ? 'none' : 'image')}
+                imageScale={imageScale}
+                onImageScaleChange={onImageScaleChange}
                 disabled={repositionMode === 'text'}
               />
             ) : (

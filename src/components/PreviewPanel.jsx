@@ -1,10 +1,13 @@
 import React, { useRef, useState } from 'react';
+import { clampImageScale, IMAGE_SCALE_STEP } from '../config/imageTransform';
 
 export default function PreviewPanel({ 
   canvasRef, 
   repositionMode, 
   imageOffset, 
   onImageOffsetChange,
+  imageScale,
+  onImageScaleChange,
   textSegments = [],
   activeTextId = null,
   onTextSegmentOffsetChange
@@ -62,6 +65,13 @@ export default function PreviewPanel({
     setIsDragging(false);
   };
 
+  const handleWheel = (e) => {
+    if (repositionMode !== 'image' || !onImageScaleChange) return;
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -IMAGE_SCALE_STEP : IMAGE_SCALE_STEP;
+    onImageScaleChange(clampImageScale((imageScale ?? 1) + delta));
+  };
+
   return (
     <div className="flex-1 min-h-[350px] sm:h-full bg-luxury-charcoal flex flex-col items-center justify-center p-6 relative overflow-hidden select-none">
       
@@ -73,6 +83,7 @@ export default function PreviewPanel({
           onMouseMove={handleMove}
           onMouseUp={handleEnd}
           onMouseLeave={handleEnd}
+          onWheel={handleWheel}
           onTouchStart={handleStart}
           onTouchMove={handleMove}
           onTouchEnd={handleEnd}
