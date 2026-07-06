@@ -11,10 +11,12 @@ import OrderDownloadScreen from './components/OrderDownloadScreen';
 import { calculateTotal } from './config/pricing';
 import { DEFAULT_LABEL_SHEET_ID } from './config/labelSheets';
 import { DEFAULT_IMAGE_SCALE, clampImageScale } from './config/imageTransform';
-import { imageElementToDataUrl, renderLabelExportCanvas } from './utils/renderLabelExport';
+import { imageElementToDataUrl, readBlobAsDataUrl } from './utils/renderLabelExport';
 
 export default function App() {
   const canvasRef = useRef(null);
+  const uploadedFileRef = useRef(null);
+  const uploadedImageDataUrlRef = useRef(null);
   const [showGallery, setShowGallery] = useState(true);
 
   // --- STATE LAYER ---
@@ -101,6 +103,8 @@ export default function App() {
       setImageOffset({ x: 0, y: 0 });
       setImageScale(DEFAULT_IMAGE_SCALE);
       setUploadedImageDataUrl(null);
+      uploadedFileRef.current = null;
+      uploadedImageDataUrlRef.current = null;
     }
     if (shapeIsTextOnly(shape) && textSegments.length === 0) {
       setTextSegments([{
@@ -150,13 +154,25 @@ export default function App() {
     setImageUrl(objectUrl);
     setImageOffset({ x: 0, y: 0 });
     setImageScale(DEFAULT_IMAGE_SCALE);
+    uploadedFileRef.current = file || null;
 
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => setUploadedImageDataUrl(reader.result);
-      reader.readAsDataURL(file);
+      readBlobAsDataUrl(file).then((dataUrl) => {
+        uploadedImageDataUrlRef.current = dataUrl;
+        setUploadedImageDataUrl(dataUrl);
+      }).catch(() => {
+        uploadedImageDataUrlRef.current = null;
+        setUploadedImageDataUrl(null);
+      });
     } else {
-      setUploadedImageDataUrl(imageElementToDataUrl(imgElement));
+      try {
+        const dataUrl = imageElementToDataUrl(imgElement);
+        uploadedImageDataUrlRef.current = dataUrl;
+        setUploadedImageDataUrl(dataUrl);
+      } catch {
+        uploadedImageDataUrlRef.current = null;
+        setUploadedImageDataUrl(null);
+      }
     }
   };
 
@@ -169,6 +185,8 @@ export default function App() {
     setImageOffset({ x: 0, y: 0 });
     setImageScale(DEFAULT_IMAGE_SCALE);
     setUploadedImageDataUrl(null);
+    uploadedFileRef.current = null;
+    uploadedImageDataUrlRef.current = null;
     if (repositionMode === 'image') {
       setRepositionMode('none'); // Cancel reposition mode if active
     }
@@ -199,11 +217,30 @@ export default function App() {
       return;
     }
 
+    // Wait for the preview canvas to finish its latest paint.
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
+
     let imageDataUrl = null;
-    if (uploadedImage) {
+    if (!isTextOnly) {
       try {
-        imageDataUrl = imageElementToDataUrl(uploadedImage);
+        if (uploadedFileRef.current) {
+          imageDataUrl = await readBlobAsDataUrl(uploadedFileRef.current);
+        } else if (uploadedImageDataUrlRef.current) {
+          imageDataUrl = uploadedImageDataUrlRef.current;
+        } else if (imageUrl) {
+          const blob = await fetch(imageUrl).then((res) => res.blob());
+          imageDataUrl = await readBlobAsDataUrl(blob);
+        } else if (uploadedImage) {
+          imageDataUrl = imageElementToDataUrl(uploadedImage);
+        }
       } catch {
+        setToastMessage('Could not save your uploaded image. Please re-upload and try again.');
+        return;
+      }
+
+      if (!imageDataUrl || imageDataUrl.length < 100) {
         setToastMessage('Could not save your uploaded image. Please re-upload and try again.');
         return;
       }
@@ -213,10 +250,23 @@ export default function App() {
     const materialForPricing = hasFoilBorder ? selectedMaterial : null;
     const { unitPrice, total } = calculateTotal(materialForPricing, quantity, uvEnabled);
 
+    // Snapshot the live preview first — this is exactly what the customer saw.
+    let thumbnail = '';
+    if (canvasRef.current) {
+      try {
+        thumbnail = canvasRef.current.toDataURL('image/png');
+      } catch {
+        thumbnail = '';
+      }
+    }
+
     const newItem = {
       shape: selectedShape,
       material: selectedMaterial,
-      textSegments: textSegments.map((segment) => ({ ...segment })),
+      textSegments: textSegments.map((segment) => ({
+        ...segment,
+        offset: segment.offset ? { ...segment.offset } : undefined
+      })),
       uvEnabled,
       ribbonColorId: shapeIsTextOnly(activeShape) ? ribbonColorId : null,
       imageDataUrl,
@@ -226,37 +276,13 @@ export default function App() {
       quantity,
       unitPrice,
       totalPrice: total,
-      thumbnail: ''
+      thumbnail
     };
 
-    let thumbnail = '';
-    try {
-      await document.fonts.ready;
-      const exportCanvas = await renderLabelExportCanvas(newItem, {
-        logicalSize: 480,
-        scaleFactor: 480 / 600
-      });
-      thumbnail = exportCanvas.toDataURL('image/png');
-    } catch {
-      if (canvasRef.current) {
-        thumbnail = canvasRef.current.toDataURL('image/png');
-      }
-    }
-
-    setCart((prev) => [...prev, { ...newItem, thumbnail }]);
-
-    // Reset customizing designer states back to standard defaults for the next order
-    setTextSegments([]);
+    setCart((prev) => [...prev, newItem]);
+    setCartOpen(true);
+    setRepositionMode('none');
     setActiveTextId(null);
-    setUploadedImage(null);
-    setImageUrl(null);
-    setUploadedImageDataUrl(null);
-    setImageOffset({ x: 0, y: 0 });
-    setImageScale(DEFAULT_IMAGE_SCALE);
-    setUvEnabled(false);
-    setRibbonColorId(DEFAULT_RIBBON_COLOR_ID);
-    setSelectedLabelSheet(DEFAULT_LABEL_SHEET_ID);
-    setQuantity(10);
 
     setToastMessage('Added design to cart successfully!');
   };

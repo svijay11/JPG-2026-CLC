@@ -15,6 +15,15 @@ import { isFullBleedMaterial, FULL_BLEED_MATERIAL_ID } from '../config/pricing';
 const PREVIEW_LOGICAL_SIZE = 600;
 const PREVIEW_MAX_TARGET = 420;
 
+export function readBlobAsDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Failed to read uploaded image file.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export function loadImageFromSrc(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -26,7 +35,12 @@ export function loadImageFromSrc(src) {
 
 export function loadImageFromDataUrl(dataUrl) {
   if (!dataUrl) return Promise.resolve(null);
-  return loadImageFromSrc(dataUrl);
+  return loadImageFromSrc(dataUrl).then((img) => {
+    if (!img.naturalWidth || !img.naturalHeight) {
+      throw new Error('Saved upload image failed to decode.');
+    }
+    return img;
+  });
 }
 
 export function imageElementToDataUrl(img) {
@@ -137,10 +151,11 @@ export async function renderLabelExportCanvas(item, options = {}) {
   };
 
   const usesBleedDieLines = shapeHasBleedAssets(shape) && Boolean(bleedImage && dieLineImage);
+  const usesSampleDieLines = Boolean(uploadedImage && sampleImage);
   const hasFoilBorder = shapeHasFoilBorder(shape) && Boolean(foilBorderImage);
   const fullBleed = noEmbellishments || isFullBleedMaterial(materialId);
   const showFoilBorder = !noEmbellishments && hasFoilBorder && !fullBleed;
-  const forceBleedClip = usesBleedDieLines && Boolean(uploadedImage || isTextOnlyShape);
+  const useBleedPhoto = usesBleedDieLines && Boolean(uploadedImage);
 
   let labelLayout = sampleImage
     ? computeSampleLabelLayout(sampleImage, maxTargetSize)
@@ -180,11 +195,21 @@ export async function renderLabelExportCanvas(item, options = {}) {
       });
     }
   } else if (labelLayout && sampleImage) {
-    dieData = getDieLineData(sampleImage, labelLayout, {
-      drawInnerDieLine: false,
-      sampleSrc: shape.sampleImage
-    });
-    if (hasFoilBorder && !fullBleed) {
+    if (usesSampleDieLines || usesBleedDieLines) {
+      if (!usesBleedDieLines) {
+        dieData = getDieLineData(sampleImage, labelLayout, {
+          drawInnerDieLine: shape.dieLines?.inner !== false,
+          innerInsetRatio: shape.dieLines?.innerInsetRatio ?? 0.034,
+          sampleSrc: shape.sampleImage
+        });
+      }
+    } else {
+      dieData = getDieLineData(sampleImage, labelLayout, {
+        drawInnerDieLine: false,
+        sampleSrc: shape.sampleImage
+      });
+    }
+    if (hasFoilBorder && !fullBleed && dieData) {
       foilClipData = getFoilBorderClipData(foilBorderImage, labelLayout, dieData, {
         foilSrc: shape.foilBorderImage
       });
@@ -199,15 +224,16 @@ export async function renderLabelExportCanvas(item, options = {}) {
     const imgW = activeImg.width;
     const imgH = activeImg.height;
     const imgRatio = imgW / imgH;
-    const bounds = forceBleedClip && bleedLayoutRef ? bleedLayoutRef : labelLayout;
+    const bounds = (useBleedPhoto || noEmbellishments) && bleedLayoutRef ? bleedLayoutRef : labelLayout;
     if (!bounds) {
       throw new Error(`Could not compute label layout for shape "${shape.id}".`);
     }
     const boundsRatio = bounds.w / bounds.h;
     let drawW;
     let drawH;
+    const coverFit = useBleedPhoto || noEmbellishments;
 
-    if (forceBleedClip) {
+    if (coverFit) {
       if (imgRatio > boundsRatio) {
         drawH = bounds.h;
         drawW = drawH * imgRatio;
@@ -241,15 +267,12 @@ export async function renderLabelExportCanvas(item, options = {}) {
   ctx.fillRect(0, 0, logicalSize, logicalSize);
 
   if (activeImg && imgDraw) {
-    if (usesBleedDieLines && dieData && (uploadedImage || isTextOnlyShape)) {
-      const useBleedClip = noEmbellishments || forceBleedClip;
-      const clipMask = useBleedClip
-        ? (dieData.bleedMaskCanvas || dieData.maskCanvas)
-        : (foilClipData?.photoClipMask || dieData.maskCanvas);
-      const clipLayout = useBleedClip && dieData.hasBleed ? bleedLayoutRef : labelLayout;
+    if ((usesSampleDieLines || usesBleedDieLines) && dieData && (uploadedImage || isTextOnlyShape)) {
       if (isTextOnlyShape) {
         const ribbonColor = getRibbonColor(ribbonColorId);
         drawTintedRibbon(ctx, activeImg, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h, ribbonColor.color, ribbonColor.id);
+        const clipMask = dieData.maskCanvas;
+        const clipLayout = labelLayout;
         if (clipMask && clipLayout) {
           ctx.save();
           ctx.globalCompositeOperation = 'destination-in';
@@ -257,7 +280,13 @@ export async function renderLabelExportCanvas(item, options = {}) {
           ctx.restore();
         }
       } else {
-        drawImageWithSampleMask(ctx, activeImg, clipMask, clipLayout, imgDraw);
+        const clipMask = useBleedPhoto || noEmbellishments
+          ? (dieData.bleedMaskCanvas || dieData.maskCanvas)
+          : (foilClipData?.photoClipMask || dieData.maskCanvas);
+        const clipLayout = (useBleedPhoto || noEmbellishments) && dieData.hasBleed
+          ? bleedLayoutRef
+          : labelLayout;
+        drawImageWithSampleMask(ctx, uploadedImage, clipMask, clipLayout, imgDraw);
       }
     } else if (isSampleLabel) {
       ctx.drawImage(activeImg, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h);
