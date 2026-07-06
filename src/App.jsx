@@ -9,7 +9,7 @@ import { useLabelCanvas } from './hooks/useLabelCanvas';
 import { DEFAULT_RIBBON_COLOR_ID } from './config/ribbonColors';
 import OrderDownloadScreen from './components/OrderDownloadScreen';
 import { calculateTotal } from './config/pricing';
-import { DEFAULT_LABEL_SHEET_ID } from './config/labelSheets';
+import { DEFAULT_LABEL_SHEET_ID, labelSheetAllowsUvCoating } from './config/labelSheets';
 import { DEFAULT_IMAGE_SCALE, clampImageScale } from './config/imageTransform';
 import { imageElementToDataUrl, readBlobAsDataUrl, capturePrintSnapshots, PREVIEW_LOGICAL_SIZE } from './utils/renderLabelExport';
 
@@ -47,8 +47,17 @@ export default function App() {
   const [completedOrder, setCompletedOrder] = useState(null);
   const [orderMeta, setOrderMeta] = useState(null);
 
-  // UV toggle handler
-  const handleUvToggle = () => setUvEnabled((prev) => !prev);
+  const handleUvToggle = () => {
+    if (!labelSheetAllowsUvCoating(selectedLabelSheet)) return;
+    setUvEnabled((prev) => !prev);
+  };
+
+  const handleSelectLabelSheet = (sheetId) => {
+    setSelectedLabelSheet(sheetId);
+    if (!labelSheetAllowsUvCoating(sheetId)) {
+      setUvEnabled(false);
+    }
+  };
 
   // --- SAMPLE IMAGE PRELOADING (per shape) ---
   const [sampleImages, setSampleImages] = useState({});
@@ -92,6 +101,7 @@ export default function App() {
   const foilBorderImage = foilBorderImages[selectedShape] || null;
   const dieLineImage = dieLineImages[selectedShape] || null;
   const bleedImage = bleedImages[selectedShape] || null;
+  const effectiveUvEnabled = uvEnabled && labelSheetAllowsUvCoating(selectedLabelSheet);
 
   const openEditorForShape = (shapeId) => {
     const shape = SHAPES.find((s) => s.id === shapeId);
@@ -133,7 +143,7 @@ export default function App() {
     textSegments,
     repositionMode,
     ribbonColorId,
-    uvEnabled,
+    uvEnabled: effectiveUvEnabled,
     setHasTextOverflow
   });
 
@@ -255,7 +265,11 @@ export default function App() {
 
     const hasFoilBorder = shapeHasFoilBorder(activeShape);
     const materialForPricing = hasFoilBorder ? selectedMaterial : null;
-    const { unitPrice, total } = calculateTotal(materialForPricing, quantity, uvEnabled);
+    const { unitPrice, total } = calculateTotal(
+      materialForPricing,
+      quantity,
+      effectiveUvEnabled
+    );
 
     const cartItemDraft = {
       shape: selectedShape,
@@ -264,7 +278,7 @@ export default function App() {
         ...segment,
         offset: segment.offset ? { ...segment.offset } : undefined
       })),
-      uvEnabled,
+      uvEnabled: effectiveUvEnabled,
       ribbonColorId: shapeIsTextOnly(activeShape) ? ribbonColorId : null,
       imageDataUrl,
       imageOffset: { ...imageOffset },
@@ -426,7 +440,7 @@ export default function App() {
         ribbonColorId={ribbonColorId}
         onRibbonColorChange={setRibbonColorId}
         selectedLabelSheet={selectedLabelSheet}
-        onSelectLabelSheet={setSelectedLabelSheet}
+        onSelectLabelSheet={handleSelectLabelSheet}
       />
 
       {/* Slide-over Cart & Checkout Portal */}

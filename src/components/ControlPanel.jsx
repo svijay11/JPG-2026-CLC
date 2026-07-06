@@ -7,7 +7,7 @@ import { calculateTotal, STATIC_QUANTITY, isStandard4cpMaterial, isFullBleedMate
 import RibbonColorSelector from './RibbonColorSelector';
 import LabelSheetSelector from './LabelSheetSelector';
 import { getRibbonColor } from '../config/ribbonColors';
-import { getLabelSheet } from '../config/labelSheets';
+import { getLabelSheet, labelSheetAllowsUvCoating } from '../config/labelSheets';
 
 export default function ControlPanel({
   selectedShape,
@@ -53,7 +53,9 @@ export default function ControlPanel({
   const isTextOnly = shapeIsTextOnly(activeShape);
   const allowsImageUpload = shapeAllowsImageUpload(activeShape);
   const materialForPricing = hasFoilBorder ? selectedMaterial : null;
-  const { unitPrice, total } = calculateTotal(materialForPricing, quantity, uvEnabled);
+  const allowsUvCoating = labelSheetAllowsUvCoating(selectedLabelSheet);
+  const effectiveUvEnabled = uvEnabled && allowsUvCoating;
+  const { unitPrice, total } = calculateTotal(materialForPricing, quantity, effectiveUvEnabled);
 
   return (
     <div className="w-full lg:w-[40%] bg-luxury-white flex flex-col h-full border-t lg:border-t-0 lg:border-l border-gray-200 relative">
@@ -169,7 +171,7 @@ export default function ControlPanel({
               defaultPathPosition={activeShape.defaultPathPosition ?? 42}
             />
 
-            {!isTextOnly && (
+            {!isTextOnly && allowsUvCoating && (
             <div className={`space-y-3 ${repositionMode !== 'none' ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
               <label className="flex items-center space-x-3 cursor-pointer">
                 <input
@@ -185,6 +187,12 @@ export default function ControlPanel({
                 </div>
               </label>
             </div>
+            )}
+
+            {!isTextOnly && !allowsUvCoating && (
+              <p className="text-xs text-gray-400 leading-relaxed">
+                UV coating is not available with Estate Label Uncoated.
+              </p>
             )}
 
           </div>
@@ -263,7 +271,7 @@ export default function ControlPanel({
             <span>Quantity:</span>
             <span>{quantity} labels</span>
           </div>
-          {uvEnabled && (
+          {effectiveUvEnabled && (
             <div className="flex justify-between text-gray-500 font-medium">
               <span>UV Coating:</span>
               <span>+${1.00.toFixed(2)}</span>
