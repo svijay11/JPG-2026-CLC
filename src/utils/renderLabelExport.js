@@ -414,6 +414,7 @@ async function buildLabelExportState(item, options = {}) {
     shape,
     isTextOnlyShape,
     labelLayout,
+    imgDraw,
     showFoilBorder,
     materialId: customerMaterialId,
     uvEnabled,
@@ -451,7 +452,7 @@ function drawExportEmbellishments(ctx, state, { includeFoil, includeUv, includeD
 }
 
 function drawExportText(ctx, state) {
-  const { textSegments, scaleFactor, center, overlayRect, shape, isTextOnlyShape, labelLayout } = state;
+  const { textSegments, scaleFactor, center, overlayRect, shape, isTextOnlyShape, labelLayout, imgDraw } = state;
   const activeSegments = textSegments.filter((s) => s?.text?.trim());
   if (activeSegments.length === 0) return;
 
@@ -461,14 +462,21 @@ function drawExportText(ctx, state) {
   ctx.shadowOffsetX = scaleFactor;
   ctx.shadowOffsetY = scaleFactor;
 
-  if (isTextOnlyShape && shape.textPath?.length && labelLayout) {
-    const canvasPath = mapShapePathToCanvas(shape.textPath, labelLayout);
+  if (isTextOnlyShape && shape.textPath?.length && (imgDraw || labelLayout)) {
+    const pathLayout = imgDraw
+      ? { x: imgDraw.x, y: imgDraw.y, w: imgDraw.w, h: imgDraw.h }
+      : labelLayout;
+    const canvasPath = mapShapePathToCanvas(shape.textPath, pathLayout);
     activeSegments.forEach((segment) => {
       drawTextAlongPath(ctx, segment.text.toUpperCase(), canvasPath, {
         fontSize: segment.fontSize * scaleFactor,
         font: segment.font || 'Josefin Sans',
         color: segment.color || '#ffffff',
-        pathPosition: segment.pathPosition ?? shape.defaultPathPosition ?? 42
+        pathPosition: segment.pathPosition ?? shape.defaultPathPosition ?? 28,
+        letterSpacing: Math.max(0, segment.fontSize * scaleFactor * 0.02),
+        uniformAngle: true,
+        autoFit: true,
+        minFontSize: 9 * scaleFactor
       });
     });
   } else {

@@ -168,7 +168,9 @@ export default function ControlPanel({
               textOnly={isTextOnly}
               maxTextLines={activeShape.maxTextLines || 6}
               maxTextLength={activeShape.maxTextLength ?? null}
-              defaultPathPosition={activeShape.defaultPathPosition ?? 42}
+              defaultPathPosition={activeShape.defaultPathPosition ?? 28}
+              defaultFontSize={activeShape.defaultFontSize ?? 17}
+              maxFontSize={activeShape.maxFontSize ?? 24}
             />
 
             {!isTextOnly && allowsUvCoating && (

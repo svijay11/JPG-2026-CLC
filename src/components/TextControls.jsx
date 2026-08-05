@@ -25,13 +25,15 @@ export default function TextControls({
   textOnly = false,
   maxTextLines = 6,
   maxTextLength = null,
-  defaultPathPosition = 42
+  defaultPathPosition = 28,
+  defaultFontSize = 17,
+  maxFontSize = 24
 }) {
   const handleAddSegment = () => {
     if (textSegments.length >= maxTextLines) return;
     const nextId = String(Date.now());
     const newSeg = textOnly
-      ? { id: nextId, text: '', fontSize: 12, color: '#ffffff', font: 'Josefin Sans', pathPosition: defaultPathPosition }
+      ? { id: nextId, text: '', fontSize: defaultFontSize, color: '#ffffff', font: 'Josefin Sans', pathPosition: defaultPathPosition }
       : { id: nextId, text: 'Custom Text', fontSize: 16, color: '#000000', font: 'Playfair Display' };
     onTextSegmentsChange([...textSegments, newSeg]);
   };
@@ -159,8 +161,8 @@ export default function TextControls({
                 <input
                   type="range"
                   min="8"
-                  max={textOnly ? '18' : '48'}
-                  value={segment.fontSize ?? 12}
+                  max={textOnly ? String(maxFontSize) : '48'}
+                  value={segment.fontSize ?? (textOnly ? defaultFontSize : 12)}
                   onChange={(e) => handleUpdateSegment(segment.id, 'fontSize', Number(e.target.value))}
                   className="w-full accent-luxury-gold cursor-pointer"
                 />

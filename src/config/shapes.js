@@ -170,10 +170,15 @@ export const SHAPES = [
     disableImageUpload: true,
     maxTextLines: 1,
     maxTextLength: 22,
-    defaultPathPosition: 42,
+    defaultFontSize: 17,
+    maxFontSize: 24,
+    defaultPathPosition: 28,
+    // Straight midline of the left descending strand (tip → toward cross), angle ≈ −55°.
     textPath: [
-      [-19.2, 32.0], [-17.3, 28.2], [-15.3, 24.4], [-13.3, 20.6], [-11.3, 16.8],
-      [-9.5, 13.0], [-7.8, 9.2], [-6.3, 5.4], [-5.1, 1.6]
+      [-21.44, 28.2], [-19.84, 25.93], [-18.51, 24.04], [-17.17, 22.14],
+      [-15.84, 20.25], [-14.5, 18.36], [-13.17, 16.47], [-11.84, 14.58],
+      [-10.5, 12.69], [-9.17, 10.8], [-7.83, 8.9], [-6.5, 7.01],
+      [-5.17, 5.12], [-3.83, 3.23]
     ],
     description: '1.9″×2.5″',
     printSizeInches: { width: 1.9, height: 2.5 },

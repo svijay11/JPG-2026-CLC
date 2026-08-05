@@ -431,15 +431,21 @@ export const useLabelCanvas = (canvasRef, {
       ctx.shadowOffsetX = 1;
       ctx.shadowOffsetY = 1;
 
-      if (isTextOnlyShape && shape.textPath?.length && labelLayout) {
-        const canvasPath = mapShapePathToCanvas(shape.textPath, labelLayout);
+      if (isTextOnlyShape && shape.textPath?.length && (imgDraw || labelLayout)) {
+        const pathLayout = imgDraw
+          ? { x: imgDraw.x, y: imgDraw.y, w: imgDraw.w, h: imgDraw.h }
+          : labelLayout;
+        const canvasPath = mapShapePathToCanvas(shape.textPath, pathLayout);
         activeSegments.forEach((segment) => {
           const pathPosition = segment.pathPosition ?? shape.defaultPathPosition ?? 50;
           const result = drawTextAlongPath(ctx, segment.text.toUpperCase(), canvasPath, {
             fontSize: segment.fontSize,
             font: segment.font || 'Josefin Sans',
             color: segment.color || '#ffffff',
-            pathPosition
+            pathPosition,
+            letterSpacing: Math.max(0, (segment.fontSize || 17) * 0.02),
+            uniformAngle: true,
+            autoFit: true
           });
           if (result?.overflows) overflowDetected = true;
         });

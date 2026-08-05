@@ -120,10 +120,10 @@ export default function App() {
       setTextSegments([{
         id: String(Date.now()),
         text: '',
-        fontSize: 12,
+        fontSize: shape.defaultFontSize ?? 17,
         color: '#ffffff',
         font: 'Josefin Sans',
-        pathPosition: shape.defaultPathPosition ?? 42
+        pathPosition: shape.defaultPathPosition ?? 28
       }]);
     }
     setShowGallery(false);
