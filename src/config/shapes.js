@@ -12,8 +12,8 @@ export const SHAPES = [
     sampleImage: '/samples/circle.png',
     bleedImage: '/samples/circle-bleed.png',
     dieLineImage: '/samples/circle-dieline.png',
-    description: 'Digital Gold, 2.5″',
-    printSizeInches: { width: 2.5, height: 2.5 },
+    description: 'Digital Gold, 3.5″',
+    printSizeInches: { width: 3.5, height: 3.5 },
     tagline: 'Upload your photo, add curved custom text, and optionally add UV coating.',
     dieLines: { inner: false, strokeMode: 'magenta', useBleed: true }
   },
