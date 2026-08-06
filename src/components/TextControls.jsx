@@ -1,16 +1,47 @@
 import React from 'react';
 
 export const FONTS = [
+  // Serif
   { id: 'Playfair Display', name: 'Playfair Display (Elegant Serif)' },
   { id: 'Cormorant Garamond', name: 'Cormorant Garamond (Refined Italic Serif)' },
   { id: 'EB Garamond', name: 'EB Garamond (Classic Book Serif)' },
   { id: 'Lora', name: 'Lora (Warm Serif)' },
   { id: 'Libre Baskerville', name: 'Libre Baskerville (Sturdy Serif)' },
   { id: 'Cinzel', name: 'Cinzel (Roman Caps Serif)' },
+  { id: 'Bodoni Moda', name: 'Bodoni Moda (High-Contrast Serif)' },
+  { id: 'DM Serif Display', name: 'DM Serif Display (Display Serif)' },
+  { id: 'Spectral', name: 'Spectral (Literary Serif)' },
+  { id: 'Crimson Pro', name: 'Crimson Pro (Book Serif)' },
+  { id: 'Merriweather', name: 'Merriweather (Readable Serif)' },
+  { id: 'Cardo', name: 'Cardo (Old-Style Serif)' },
+  { id: 'Libre Caslon Text', name: 'Libre Caslon Text (Transitional Serif)' },
+  { id: 'Alegreya', name: 'Alegreya (Calligraphic Serif)' },
+  { id: 'Unna', name: 'Unna (Quiet Serif)' },
+  { id: 'Instrument Serif', name: 'Instrument Serif (Modern Editorial)' },
+  { id: 'Abril Fatface', name: 'Abril Fatface (Bold Display Serif)' },
+  { id: 'Yeseva One', name: 'Yeseva One (Decorative Serif)' },
+  { id: 'Marcellus', name: 'Marcellus (Trajan Caps)' },
+  { id: 'Italiana', name: 'Italiana (Fashion Serif)' },
+  // Script
   { id: 'Great Vibes', name: 'Great Vibes (Formal Script)' },
   { id: 'Dancing Script', name: 'Dancing Script (Casual Script)' },
+  { id: 'Allura', name: 'Allura (Flourish Script)' },
+  { id: 'Alex Brush', name: 'Alex Brush (Brush Script)' },
+  { id: 'Parisienne', name: 'Parisienne (French Script)' },
+  { id: 'Pinyon Script', name: 'Pinyon Script (Formal Script)' },
+  { id: 'Sacramento', name: 'Sacramento (Soft Script)' },
+  { id: 'Tangerine', name: 'Tangerine (Delicate Script)' },
+  { id: 'Italianno', name: 'Italianno (Flowing Script)' },
+  { id: 'Imperial Script', name: 'Imperial Script (Copperplate Script)' },
+  // Sans
   { id: 'Josefin Sans', name: 'Josefin Sans (Geometric Sans)' },
-  { id: 'Raleway', name: 'Raleway (Elegant Sans)' }
+  { id: 'Raleway', name: 'Raleway (Elegant Sans)' },
+  { id: 'Montserrat', name: 'Montserrat (Modern Sans)' },
+  { id: 'Tenor Sans', name: 'Tenor Sans (Classic Caps Sans)' },
+  { id: 'Poiret One', name: 'Poiret One (Art Deco Sans)' },
+  { id: 'Outfit', name: 'Outfit (Clean Sans)' },
+  { id: 'Cormorant Unicase', name: 'Cormorant Unicase (Display Caps)' },
+  { id: 'Quicksand', name: 'Quicksand (Rounded Sans)' }
 ];
 
 export default function TextControls({
