@@ -18,8 +18,28 @@ import { resolveUploadedPhotoPlacement, computeImageDraw, shouldDrawFoilBlackBas
 
 const PREVIEW_LOGICAL_SIZE = 600;
 const PREVIEW_MAX_TARGET = 420;
+/** Target dots-per-inch for designer/customer print files in the order PDF. */
+const PRINT_EXPORT_DPI = 300;
+/** Extra margin so bleed (~1.05× trim) and layout padding still clear 300 DPI on the longest edge. */
+const PRINT_BLEED_PAD = 1.12;
 
-export { PREVIEW_LOGICAL_SIZE, PREVIEW_MAX_TARGET };
+export { PREVIEW_LOGICAL_SIZE, PREVIEW_MAX_TARGET, PRINT_EXPORT_DPI };
+
+/**
+ * Scale options so the exported label crop is ~PRINT_EXPORT_DPI across its longest physical side.
+ * Preview uses scaleFactor 1 (~420px ≈ 100–150 DPI when printed) — far too soft for press work.
+ */
+export function getPrintExportRenderOptions(shapeOrId, dpi = PRINT_EXPORT_DPI) {
+  const size = getShapePrintSizeInches(shapeOrId);
+  const maxInches = Math.max(size.width || 3, size.height || 3);
+  const targetLabelPx = maxInches * PRINT_BLEED_PAD * dpi;
+  const scaleFactor = Math.max(1, targetLabelPx / PREVIEW_MAX_TARGET);
+  return {
+    scaleFactor,
+    logicalSize: PREVIEW_LOGICAL_SIZE * scaleFactor,
+    dpi
+  };
+}
 
 export function normalizeLayoutBounds(bounds) {
   if (!bounds) return null;
@@ -538,9 +558,13 @@ export async function renderLabelExportCanvasPair(item, options = {}) {
   return { customer, designer };
 }
 
-/** Crop + encode both print copies at cart-add time so PDF export uses frozen pixels. */
+/** Crop + encode both print copies at cart-add time so PDF export uses frozen high-res pixels. */
 export async function capturePrintSnapshots(cartItem, options = {}) {
-  const { customer, designer } = await renderLabelExportCanvasPair(cartItem, options);
+  const printOptions = {
+    ...getPrintExportRenderOptions(cartItem.shape),
+    ...options
+  };
+  const { customer, designer } = await renderLabelExportCanvasPair(cartItem, printOptions);
   const exportBounds = customer.exportBounds;
   const customerCrop = cropCanvasToBounds(customer.canvas, exportBounds);
   const designerCrop = cropCanvasToBounds(designer.canvas, exportBounds);

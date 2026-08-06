@@ -3,7 +3,7 @@ import { SHAPES, shapeIsTextOnly, getShapeSize } from '../config/shapes';
 import { MATERIALS } from '../config/pricing';
 import { getRibbonColor } from '../config/ribbonColors';
 import { getLabelSheet } from '../config/labelSheets';
-import { renderLabelExportCanvasPair, cropCanvasToBounds, computePdfLabelDrawSizeMm, PREVIEW_LOGICAL_SIZE } from './renderLabelExport';
+import { renderLabelExportCanvasPair, cropCanvasToBounds, computePdfLabelDrawSizeMm, getPrintExportRenderOptions, PREVIEW_LOGICAL_SIZE, PREVIEW_MAX_TARGET } from './renderLabelExport';
 
 const SHOP_NAME = 'Idyll Time Wines';
 const SHOP_URL = 'idylltimewines.com';
@@ -313,7 +313,18 @@ async function addPrintReadyPageFromRender(pdf, renderResult, item, { noEmbellis
 
 async function addPrintReadyPage(pdf, item, { noEmbellishments = false } = {}) {
   const storedUrl = noEmbellishments ? item.designerPrintDataUrl : item.customerPrintDataUrl;
-  if (storedUrl && item.printExportBounds && item.printTrimLayout) {
+  const storedBounds = item.printExportBounds;
+  const storedLooksPrintable =
+    storedUrl &&
+    item.printTrimLayout &&
+    storedBounds &&
+    Math.max(storedBounds.w || 0, storedBounds.h || 0) >=
+      Math.max(
+        getPrintExportRenderOptions(item.shape).logicalSize * (PREVIEW_MAX_TARGET / PREVIEW_LOGICAL_SIZE) * 0.85,
+        900
+      );
+
+  if (storedLooksPrintable) {
     await addPrintReadyPageFromImageData(
       pdf,
       storedUrl,
@@ -325,10 +336,8 @@ async function addPrintReadyPage(pdf, item, { noEmbellishments = false } = {}) {
     return;
   }
 
-  const pair = await renderLabelExportCanvasPair(item, {
-    logicalSize: PREVIEW_LOGICAL_SIZE,
-    scaleFactor: 1
-  });
+  // Re-render at print DPI when snapshots are missing or from the old preview-resolution path.
+  const pair = await renderLabelExportCanvasPair(item, getPrintExportRenderOptions(item.shape));
   const renderResult = noEmbellishments ? pair.designer : pair.customer;
   await addPrintReadyPageFromRender(pdf, renderResult, item, { noEmbellishments });
 }

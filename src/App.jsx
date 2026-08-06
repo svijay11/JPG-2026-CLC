@@ -11,7 +11,7 @@ import OrderDownloadScreen from './components/OrderDownloadScreen';
 import { calculateTotal } from './config/pricing';
 import { DEFAULT_LABEL_SHEET_ID, labelSheetAllowsUvCoating } from './config/labelSheets';
 import { DEFAULT_IMAGE_SCALE, clampImageScale } from './config/imageTransform';
-import { imageElementToDataUrl, readBlobAsDataUrl, capturePrintSnapshots, PREVIEW_LOGICAL_SIZE } from './utils/renderLabelExport';
+import { imageElementToDataUrl, readBlobAsDataUrl, capturePrintSnapshots } from './utils/renderLabelExport';
 
 export default function App() {
   const canvasRef = useRef(null);
@@ -291,10 +291,7 @@ export default function App() {
 
     let printSnapshots = {};
     try {
-      printSnapshots = await capturePrintSnapshots(cartItemDraft, {
-        logicalSize: PREVIEW_LOGICAL_SIZE,
-        scaleFactor: 1
-      });
+      printSnapshots = await capturePrintSnapshots(cartItemDraft);
     } catch (err) {
       console.error('Print snapshot capture failed:', err);
     }
