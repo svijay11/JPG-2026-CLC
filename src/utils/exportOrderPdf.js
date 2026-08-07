@@ -132,8 +132,16 @@ function getItemOptions(item) {
     }
   }
 
-  const text = item.textSegments?.map((s) => s.text).filter(Boolean).join(', ');
-  if (text) lines.push(`Text: ${text}`);
+  const segments = (item.textSegments || []).filter((s) => s?.text?.trim());
+  if (segments.length > 0) {
+    segments.forEach((segment, index) => {
+      const label = segments.length > 1 ? `Text ${index + 1}` : 'Text';
+      lines.push(`${label}: ${segment.text.trim()}`);
+      lines.push(`  Font: ${segment.font || 'Playfair Display'}`);
+      lines.push(`  Size: ${segment.fontSize ?? 16}px`);
+      lines.push(`  Color: ${segment.color || '#000000'}`);
+    });
+  }
 
   return lines;
 }
@@ -314,7 +322,10 @@ async function addPrintReadyPageFromRender(pdf, renderResult, item, { noEmbellis
 async function addPrintReadyPage(pdf, item, { noEmbellishments = false } = {}) {
   const storedUrl = noEmbellishments ? item.designerPrintDataUrl : item.customerPrintDataUrl;
   const storedBounds = item.printExportBounds;
+  // Ribbon snapshots from the broken export path must be re-rendered with tint + correct layout.
+  const canUseStoredSnapshot = !shapeIsTextOnly(item.shape);
   const storedLooksPrintable =
+    canUseStoredSnapshot &&
     storedUrl &&
     item.printTrimLayout &&
     storedBounds &&
@@ -336,7 +347,7 @@ async function addPrintReadyPage(pdf, item, { noEmbellishments = false } = {}) {
     return;
   }
 
-  // Re-render at print DPI when snapshots are missing or from the old preview-resolution path.
+  // Re-render at print DPI when snapshots are missing, low-res, or ribbon.
   const pair = await renderLabelExportCanvasPair(item, getPrintExportRenderOptions(item.shape));
   const renderResult = noEmbellishments ? pair.designer : pair.customer;
   await addPrintReadyPageFromRender(pdf, renderResult, item, { noEmbellishments });

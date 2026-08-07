@@ -12,7 +12,6 @@ import {
   drawBleedGuideLine,
   drawBleedInteriorBlack
 } from '../utils/labelDieLines';
-import { drawTextAlongPath, mapShapePathToCanvas } from '../utils/curvedText';
 import { drawTintedRibbon } from '../utils/ribbonTint';
 import { getRibbonColor } from '../config/ribbonColors';
 import { isFullBleedMaterial } from '../config/pricing';
@@ -424,32 +423,15 @@ export const useLabelCanvas = (canvasRef, {
     let overflowDetected = false;
     const activeSegments = textSegments.filter(s => s && s.text && s.text.trim().length > 0);
     
-    if (activeSegments.length > 0) {
+    // Ribbon text is intentionally not drawn in the live preview — designers
+    // apply the message on the final product from the order details / PDF.
+    if (activeSegments.length > 0 && !isTextOnlyShape) {
       ctx.save();
       ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
       ctx.shadowBlur = 4;
       ctx.shadowOffsetX = 1;
       ctx.shadowOffsetY = 1;
 
-      if (isTextOnlyShape && shape.textPath?.length && (imgDraw || labelLayout)) {
-        const pathLayout = imgDraw
-          ? { x: imgDraw.x, y: imgDraw.y, w: imgDraw.w, h: imgDraw.h }
-          : labelLayout;
-        const canvasPath = mapShapePathToCanvas(shape.textPath, pathLayout);
-        activeSegments.forEach((segment) => {
-          const pathPosition = segment.pathPosition ?? shape.defaultPathPosition ?? 50;
-          const result = drawTextAlongPath(ctx, segment.text.toUpperCase(), canvasPath, {
-            fontSize: segment.fontSize,
-            font: segment.font || 'Josefin Sans',
-            color: segment.color || '#ffffff',
-            pathPosition,
-            letterSpacing: Math.max(0, (segment.fontSize || 17) * 0.02),
-            uniformAngle: true,
-            autoFit: true
-          });
-          if (result?.overflows) overflowDetected = true;
-        });
-      } else {
       // Centered in lower third by default; move up for narrow crest shapes
       let baseTextCenterY = overlayRect.y + overlayRect.height * 0.75;
       if (shape && shape.id === 'template_page_10_crest_wave') {
@@ -518,14 +500,13 @@ export const useLabelCanvas = (canvasRef, {
       });
 
       // Draw dashed outline if text is selected for repositioning
-      if (repositionMode === 'text' && !isTextOnlyShape) {
+      if (repositionMode === 'text') {
         ctx.restore(); // restore shadow settings so box isn't shadowed
         ctx.save();
         ctx.strokeStyle = '#c9a84c'; // Gold cut line / border for active editing
         ctx.lineWidth = 1.5;
         ctx.setLineDash([4, 4]);
         ctx.strokeRect(minX - 8, minY - 8, (maxX - minX) + 16, (maxY - minY) + 16);
-      }
       }
 
       ctx.restore();

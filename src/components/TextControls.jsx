@@ -102,7 +102,7 @@ export default function TextControls({
 
       {textOnly && (
         <p className="text-xs text-pink-600/90 leading-relaxed bg-pink-50 border border-pink-100 rounded-lg p-3">
-          Your message curves diagonally along the left ribbon strand. Keep it short — use the slider to nudge it along the strand.
+          Enter your message below — keep it short so it fits cleanly on the ribbon strand.
         </p>
       )}
 
@@ -169,6 +169,11 @@ export default function TextControls({
                 placeholder={textOnly ? 'Enter your message' : `Line ${index + 1} text`}
                 className="w-full p-2 text-sm text-luxury-charcoal bg-white border border-neutral-200 rounded focus:border-luxury-gold focus:outline-none transition-colors"
               />
+              {textOnly && (
+                <p className="text-[11px] text-gray-500 leading-relaxed pt-1">
+                  Ribbon text doesn&apos;t show up on the preview, but rest assured, our designers will have it on the final product!
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-12 gap-3 items-center">
@@ -211,41 +216,7 @@ export default function TextControls({
               </div>
             </div>
 
-            {textOnly ? (
-              <div className="space-y-2">
-                <div className="flex flex-col space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[9px] font-bold text-neutral-400 uppercase">
-                      Slide along ribbon
-                    </label>
-                    <span className="text-[10px] text-neutral-400">
-                      {segment.pathPosition ?? defaultPathPosition}%
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={segment.pathPosition ?? defaultPathPosition}
-                    onChange={(e) => handleUpdateSegment(segment.id, 'pathPosition', Number(e.target.value))}
-                    className="w-full accent-pink-500 cursor-pointer"
-                  />
-                  <div className="flex justify-between text-[9px] text-neutral-400">
-                    <span>Bottom</span>
-                    <span>Top</span>
-                  </div>
-                </div>
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => resetTextPositionFor(segment.id)}
-                    className="text-xs font-semibold px-2 py-1 rounded bg-white hover:bg-neutral-50 text-neutral-600 border border-neutral-200"
-                  >
-                    Recenter on ribbon
-                  </button>
-                </div>
-              </div>
-            ) : (
+            {textOnly ? null : (
               <div className="flex justify-end space-x-2 mt-2">
                 <button
                   type="button"

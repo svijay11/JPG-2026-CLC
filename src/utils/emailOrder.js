@@ -1,6 +1,7 @@
 import { SHAPES } from '../config/shapes';
 import { MATERIALS } from '../config/pricing';
 import { getLabelSheet } from '../config/labelSheets';
+import { getRibbonColor } from '../config/ribbonColors';
 import { buildOrderReceiptPdfBase64 } from '../utils/exportOrderPdf';
 
 function formatMoney(value) {
@@ -27,14 +28,23 @@ export function buildOrderEmailSummary(items = [], orderMeta = {}) {
     const shape = SHAPES.find((s) => s.id === item.shape);
     const material = MATERIALS.find((m) => m.id === item.material);
     const sheet = item.labelSheetId ? getLabelSheet(item.labelSheetId) : null;
-    const text = item.textSegments?.map((s) => s.text).filter(Boolean).join(' · ');
+    const segments = (item.textSegments || []).filter((s) => s?.text?.trim());
 
     lines.push(`Item ${index + 1}: ${shape?.name || item.shape}`);
     lines.push(`  Qty: ${item.quantity}`);
     lines.push(`  Finish: ${material?.name || item.material || 'Standard 4CP'}`);
     if (sheet) lines.push(`  Label sheet: ${sheet.name}`);
     if (item.uvEnabled) lines.push('  UV coating: Yes');
-    if (text) lines.push(`  Text: ${text}`);
+    if (item.ribbonColorId) {
+      lines.push(`  Ribbon color: ${getRibbonColor(item.ribbonColorId).name}`);
+    }
+    segments.forEach((segment, segIndex) => {
+      const label = segments.length > 1 ? `Text ${segIndex + 1}` : 'Text';
+      lines.push(`  ${label}: ${segment.text.trim()}`);
+      lines.push(`    Font: ${segment.font || 'Playfair Display'}`);
+      lines.push(`    Size: ${segment.fontSize ?? 16}px`);
+      lines.push(`    Color: ${segment.color || '#000000'}`);
+    });
     lines.push(`  Line total: ${formatMoney(item.totalPrice)}`);
     lines.push('');
   });

@@ -10,7 +10,6 @@ import {
   drawDieLines,
   DIE_LINE_COLORS
 } from '../utils/labelDieLines';
-import { drawTextAlongPath, mapShapePathToCanvas } from '../utils/curvedText';
 import { drawTintedRibbon } from '../utils/ribbonTint';
 import { getRibbonColor } from '../config/ribbonColors';
 import { isFullBleedMaterial } from '../config/pricing';
@@ -261,15 +260,19 @@ async function buildLabelExportState(item, options = {}) {
         foilSrc: shape.foilBorderImage
       });
     }
+  } else if (labelLayout && dieLineImage) {
+    dieData = getDieLineData(dieLineImage, labelLayout, {
+      drawInnerDieLine: false,
+      sampleSrc: shape.dieLineImage,
+      strokeMode: shape.dieLines?.strokeMode || null
+    });
   } else if (labelLayout && sampleImage) {
-    if (usesSampleDieLines || usesBleedDieLines) {
-      if (!usesBleedDieLines) {
-        dieData = getDieLineData(sampleImage, labelLayout, {
-          drawInnerDieLine: shape.dieLines?.inner !== false,
-          innerInsetRatio: shape.dieLines?.innerInsetRatio ?? 0.034,
-          sampleSrc: shape.sampleImage
-        });
-      }
+    if (usesSampleDieLines) {
+      dieData = getDieLineData(sampleImage, labelLayout, {
+        drawInnerDieLine: shape.dieLines?.inner !== false,
+        innerInsetRatio: shape.dieLines?.innerInsetRatio ?? 0.034,
+        sampleSrc: shape.sampleImage
+      });
     } else {
       dieData = getDieLineData(sampleImage, labelLayout, {
         drawInnerDieLine: false,
@@ -283,8 +286,14 @@ async function buildLabelExportState(item, options = {}) {
     }
   }
 
+  if (hasFoilBorder && !customerFullBleed && dieData && labelLayout && !foilClipData) {
+    foilClipData = getFoilBorderClipData(foilBorderImage, labelLayout, dieData, {
+      foilSrc: shape.foilBorderImage
+    });
+  }
+
   const activeImg = isTextOnlyShape ? sampleImage : uploadedImage;
-  const isSampleLabel = !isTextOnlyShape && !uploadedImage && sampleImage && !shape.clipSampleToShape;
+  const isSampleLabel = !uploadedImage && sampleImage && !shape.clipSampleToShape;
   let imgDraw = null;
 
   const photoPlacement = uploadedImage
@@ -310,7 +319,7 @@ async function buildLabelExportState(item, options = {}) {
         scaleFactor,
         uploadedImage: true
       });
-    } else if (isSampleLabel || usesSampleDieLines || usesBleedDieLines) {
+    } else if (isSampleLabel || isTextOnlyShape || usesSampleDieLines || usesBleedDieLines) {
       const imgW = activeImg.naturalWidth || activeImg.width;
       const imgH = activeImg.naturalHeight || activeImg.height;
       const imgRatio = imgW / imgH;
@@ -381,19 +390,20 @@ async function buildLabelExportState(item, options = {}) {
   }
 
   if (activeImg && imgDraw) {
-    if ((usesSampleDieLines || usesBleedDieLines) && dieData && (uploadedImage || isTextOnlyShape)) {
-      if (isTextOnlyShape) {
-        const ribbonColor = getRibbonColor(ribbonColorId);
-        drawTintedRibbon(ctx, activeImg, imgDraw.x, imgDraw.y, imgDraw.w, imgDraw.h, ribbonColor.color, ribbonColor.id);
-        const clipMask = dieData.maskCanvas;
-        const clipLayout = labelLayout;
-        if (clipMask && clipLayout) {
-          ctx.save();
-          ctx.globalCompositeOperation = 'destination-in';
-          ctx.drawImage(clipMask, clipLayout.x, clipLayout.y, clipLayout.w, clipLayout.h);
-          ctx.restore();
-        }
-      } else if (photoPlacement) {
+    if (isTextOnlyShape) {
+      const ribbonColor = getRibbonColor(ribbonColorId);
+      drawTintedRibbon(
+        ctx,
+        activeImg,
+        imgDraw.x,
+        imgDraw.y,
+        imgDraw.w,
+        imgDraw.h,
+        ribbonColor.color,
+        ribbonColor.id
+      );
+    } else if ((usesSampleDieLines || usesBleedDieLines) && dieData && uploadedImage) {
+      if (photoPlacement) {
         drawImageWithSampleMask(
           ctx,
           uploadedImage,
@@ -472,9 +482,10 @@ function drawExportEmbellishments(ctx, state, { includeFoil, includeUv, includeD
 }
 
 function drawExportText(ctx, state) {
-  const { textSegments, scaleFactor, center, overlayRect, shape, isTextOnlyShape, labelLayout, imgDraw } = state;
+  const { textSegments, scaleFactor, center, overlayRect, shape, isTextOnlyShape } = state;
   const activeSegments = textSegments.filter((s) => s?.text?.trim());
-  if (activeSegments.length === 0) return;
+  // Ribbon message stays off the artwork — designers take it from the receipt line item.
+  if (activeSegments.length === 0 || isTextOnlyShape) return;
 
   ctx.save();
   ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
@@ -482,58 +493,40 @@ function drawExportText(ctx, state) {
   ctx.shadowOffsetX = scaleFactor;
   ctx.shadowOffsetY = scaleFactor;
 
-  if (isTextOnlyShape && shape.textPath?.length && (imgDraw || labelLayout)) {
-    const pathLayout = imgDraw
-      ? { x: imgDraw.x, y: imgDraw.y, w: imgDraw.w, h: imgDraw.h }
-      : labelLayout;
-    const canvasPath = mapShapePathToCanvas(shape.textPath, pathLayout);
-    activeSegments.forEach((segment) => {
-      drawTextAlongPath(ctx, segment.text.toUpperCase(), canvasPath, {
-        fontSize: segment.fontSize * scaleFactor,
-        font: segment.font || 'Josefin Sans',
-        color: segment.color || '#ffffff',
-        pathPosition: segment.pathPosition ?? shape.defaultPathPosition ?? 28,
-        letterSpacing: Math.max(0, segment.fontSize * scaleFactor * 0.02),
-        uniformAngle: true,
-        autoFit: true,
-        minFontSize: 9 * scaleFactor
-      });
-    });
-  } else {
-    let baseTextCenterY = overlayRect.y + overlayRect.height * 0.75;
-    if (shape.id === 'template_page_10_crest_wave') {
-      baseTextCenterY = overlayRect.y + overlayRect.height * 0.5;
-    }
-    const totalTextHeight = activeSegments.reduce((acc, seg) => acc + seg.fontSize * 1.3 * scaleFactor, 0);
-    let currentY = baseTextCenterY - totalTextHeight / 2;
-
-    activeSegments.forEach((segment) => {
-      const fontName = segment.font || 'Playfair Display';
-      const fontSize = segment.fontSize * scaleFactor;
-      ctx.font = `${fontSize}px "${fontName}", serif`;
-      ctx.fillStyle = segment.color || '#000000';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-
-      const segOffset = segment.offset || { x: 0, y: 0 };
-      const lineY = currentY + segOffset.y * scaleFactor;
-      const lineX = center + segOffset.x * scaleFactor;
-
-      const padding = 24 * scaleFactor;
-      const availableWidth = overlayRect.width - padding;
-      let currentFontSize = fontSize;
-      ctx.font = `${currentFontSize}px "${fontName}", serif`;
-      let metrics = ctx.measureText(segment.text);
-      if (metrics.width > availableWidth) {
-        const scale = availableWidth / metrics.width;
-        currentFontSize = Math.max(8 * scaleFactor, Math.floor(currentFontSize * scale));
-        ctx.font = `${currentFontSize}px "${fontName}", serif`;
-      }
-
-      ctx.fillText(segment.text, lineX, lineY);
-      currentY += currentFontSize * 1.3;
-    });
+  let baseTextCenterY = overlayRect.y + overlayRect.height * 0.75;
+  if (shape.id === 'template_page_10_crest_wave') {
+    baseTextCenterY = overlayRect.y + overlayRect.height * 0.5;
   }
+  const totalTextHeight = activeSegments.reduce((acc, seg) => acc + seg.fontSize * 1.3 * scaleFactor, 0);
+  let currentY = baseTextCenterY - totalTextHeight / 2;
+
+  activeSegments.forEach((segment) => {
+    const fontName = segment.font || 'Playfair Display';
+    const fontSize = segment.fontSize * scaleFactor;
+    ctx.font = `${fontSize}px "${fontName}", serif`;
+    ctx.fillStyle = segment.color || '#000000';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+
+    const segOffset = segment.offset || { x: 0, y: 0 };
+    const lineY = currentY + segOffset.y * scaleFactor;
+    const lineX = center + segOffset.x * scaleFactor;
+
+    const padding = 24 * scaleFactor;
+    const availableWidth = overlayRect.width - padding;
+    let currentFontSize = fontSize;
+    ctx.font = `${currentFontSize}px "${fontName}", serif`;
+    let metrics = ctx.measureText(segment.text);
+    if (metrics.width > availableWidth) {
+      const scale = availableWidth / metrics.width;
+      currentFontSize = Math.max(8 * scaleFactor, Math.floor(currentFontSize * scale));
+      ctx.font = `${currentFontSize}px "${fontName}", serif`;
+    }
+
+    ctx.fillText(segment.text, lineX, lineY);
+    currentY += currentFontSize * 1.3;
+  });
+
   ctx.restore();
 }
 
