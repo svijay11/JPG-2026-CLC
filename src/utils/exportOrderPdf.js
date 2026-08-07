@@ -346,7 +346,7 @@ async function addPrintReadyPage(pdf, item, { noEmbellishments = false } = {}) {
  * Etsy-style order receipt (page 1) + print-ready label preview(s) (page 2+),
  * plus a no-embellishments designer page for every item.
  */
-export async function exportOrderReceiptPdf(items, orderMeta = {}, filename = 'idyll-time-order.pdf') {
+export async function buildOrderReceiptPdf(items, orderMeta = {}) {
   await document.fonts.ready;
 
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter', compress: true });
@@ -357,6 +357,16 @@ export async function exportOrderReceiptPdf(items, orderMeta = {}, filename = 'i
     await addPrintReadyPage(pdf, item, { noEmbellishments: true });
   }
 
+  return pdf;
+}
+
+export async function buildOrderReceiptPdfBase64(items, orderMeta = {}) {
+  const pdf = await buildOrderReceiptPdf(items, orderMeta);
+  return pdf.output('datauristring').split(',')[1];
+}
+
+export async function exportOrderReceiptPdf(items, orderMeta = {}, filename = 'idyll-time-order.pdf') {
+  const pdf = await buildOrderReceiptPdf(items, orderMeta);
   pdf.save(filename);
   return filename;
 }

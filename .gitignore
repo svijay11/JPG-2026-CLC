@@ -23,5 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 
-# Environment secrets
+# Environment secrets — never commit API keys
 .env
+.env.*
+!.env.example
+*.pem

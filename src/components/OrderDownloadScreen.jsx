@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { SHAPES } from '../config/shapes';
 import { MATERIALS } from '../config/pricing';
 import { exportAllCartItemsToPdf, exportCartItemToPdf } from '../utils/exportOrderPdf';
+import { emailOrderToShop } from '../utils/emailOrder';
 import CartItemPreview from './CartItemPreview';
 
 export default function OrderDownloadScreen({
@@ -12,6 +13,32 @@ export default function OrderDownloadScreen({
   const [downloading, setDownloading] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const [error, setError] = useState(null);
+  const [emailStatus, setEmailStatus] = useState('sending'); // sending | sent | error
+  const [emailError, setEmailError] = useState(null);
+  const emailStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (emailStartedRef.current) return;
+    emailStartedRef.current = true;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        await emailOrderToShop(orderItems, orderMeta);
+        if (!cancelled) setEmailStatus('sent');
+      } catch (err) {
+        console.error('Shop order email failed:', err);
+        if (!cancelled) {
+          setEmailStatus('error');
+          setEmailError(err?.message || 'Could not email the shop. You can still download the PDF.');
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [orderItems, orderMeta]);
 
   const handleDownloadAll = async () => {
     setDownloading(true);
@@ -41,6 +68,19 @@ export default function OrderDownloadScreen({
     }
   };
 
+  const handleRetryEmail = async () => {
+    setEmailStatus('sending');
+    setEmailError(null);
+    try {
+      await emailOrderToShop(orderItems, orderMeta);
+      setEmailStatus('sent');
+    } catch (err) {
+      console.error('Shop order email failed:', err);
+      setEmailStatus('error');
+      setEmailError(err?.message || 'Could not email the shop. You can still download the PDF.');
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[60] bg-luxury-charcoal/95 backdrop-blur-sm flex items-center justify-center p-6 font-sansUI">
       <div className="w-full max-w-lg bg-white rounded-xl shadow-2xl overflow-hidden">
@@ -56,6 +96,26 @@ export default function OrderDownloadScreen({
           <p className="text-sm text-gray-500 leading-relaxed">
             Payment skipped for now — download your Etsy-style order receipt with print-ready label art on page 2.
           </p>
+          <div className="mt-4 text-xs">
+            {emailStatus === 'sending' && (
+              <p className="text-gray-500">Notifying the print shop…</p>
+            )}
+            {emailStatus === 'sent' && (
+              <p className="text-green-700 font-medium">Order PDF emailed to the shop.</p>
+            )}
+            {emailStatus === 'error' && (
+              <div className="space-y-2">
+                <p className="text-amber-700">{emailError}</p>
+                <button
+                  type="button"
+                  onClick={handleRetryEmail}
+                  className="text-luxury-gold font-semibold hover:underline"
+                >
+                  Retry email to shop
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="p-6 space-y-4 max-h-[40vh] overflow-y-auto">
