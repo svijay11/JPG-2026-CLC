@@ -14,7 +14,6 @@ export default function OrderDownloadScreen({
   const [downloaded, setDownloaded] = useState(false);
   const [error, setError] = useState(null);
   const [emailStatus, setEmailStatus] = useState('sending'); // sending | sent | error
-  const [emailError, setEmailError] = useState(null);
   const emailStartedRef = useRef(false);
 
   useEffect(() => {
@@ -28,10 +27,7 @@ export default function OrderDownloadScreen({
         if (!cancelled) setEmailStatus('sent');
       } catch (err) {
         console.error('Shop order email failed:', err);
-        if (!cancelled) {
-          setEmailStatus('error');
-          setEmailError(err?.message || 'Could not email the shop. You can still download the PDF.');
-        }
+        if (!cancelled) setEmailStatus('error');
       }
     })();
 
@@ -70,14 +66,12 @@ export default function OrderDownloadScreen({
 
   const handleRetryEmail = async () => {
     setEmailStatus('sending');
-    setEmailError(null);
     try {
       await emailOrderToShop(orderItems, orderMeta);
       setEmailStatus('sent');
     } catch (err) {
       console.error('Shop order email failed:', err);
       setEmailStatus('error');
-      setEmailError(err?.message || 'Could not email the shop. You can still download the PDF.');
     }
   };
 
@@ -105,13 +99,15 @@ export default function OrderDownloadScreen({
             )}
             {emailStatus === 'error' && (
               <div className="space-y-2">
-                <p className="text-amber-700">{emailError}</p>
+                <p className="text-amber-700">
+                  We couldn&apos;t send your order to the print shop automatically. Please try again, or download your order PDF and send it to us.
+                </p>
                 <button
                   type="button"
                   onClick={handleRetryEmail}
                   className="text-luxury-gold font-semibold hover:underline"
                 >
-                  Retry email to shop
+                  Try again
                 </button>
               </div>
             )}
