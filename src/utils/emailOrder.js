@@ -86,6 +86,7 @@ export async function emailOrderToShop(items, orderMeta = {}) {
       orderMeta: {
         orderId: orderMeta.orderId,
         buyerName: orderMeta.buyerName,
+        buyerEmail: orderMeta.buyerEmail,
         orderDate: orderMeta.orderDate,
         deliveryMethod: orderMeta.deliveryMethod,
         shippingAddress: orderMeta.shippingAddress,

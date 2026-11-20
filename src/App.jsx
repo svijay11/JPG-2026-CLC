@@ -7,13 +7,14 @@ import Toast from './components/Toast';
 import CartModal from './components/CartModal';
 import { useLabelCanvas } from './hooks/useLabelCanvas';
 import { DEFAULT_RIBBON_COLOR_ID } from './config/ribbonColors';
-import OrderDownloadScreen from './components/OrderDownloadScreen';
 import { calculateTotal } from './config/pricing';
 import { DEFAULT_LABEL_SHEET_ID, labelSheetAllowsUvCoating } from './config/labelSheets';
 import { DEFAULT_IMAGE_SCALE, clampImageScale } from './config/imageTransform';
 import { imageElementToDataUrl, readBlobAsDataUrl, capturePrintSnapshots } from './utils/renderLabelExport';
+import { useCart } from './context/CartContext';
 
 export default function App() {
+  const { cart, addToCart, removeFromCart } = useCart();
   const canvasRef = useRef(null);
   const uploadedFileRef = useRef(null);
   const uploadedImageDataUrlRef = useRef(null);
@@ -41,11 +42,7 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState(null);
   const [selectedLabelSheet, setSelectedLabelSheet] = useState(DEFAULT_LABEL_SHEET_ID);
 
-  // --- CART STATE ---
-  const [cart, setCart] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
-  const [completedOrder, setCompletedOrder] = useState(null);
-  const [orderMeta, setOrderMeta] = useState(null);
 
   const handleUvToggle = () => {
     if (!labelSheetAllowsUvCoating(selectedLabelSheet)) return;
@@ -312,23 +309,12 @@ export default function App() {
       thumbnail
     };
 
-    setCart((prev) => [...prev, newItem]);
+    addToCart(newItem);
     setCartOpen(true);
     setRepositionMode('none');
     setActiveTextId(null);
 
     setToastMessage('Added design to cart successfully!');
-  };
-
-  const handleRemoveItem = (indexToRemove) => {
-    setCart((prev) => prev.filter((_, idx) => idx !== indexToRemove));
-  };
-
-  const handleCompleteOrder = (items, meta = {}) => {
-    setCompletedOrder(items.map((item) => ({ ...item })));
-    setOrderMeta(meta);
-    setCart([]);
-    setCartOpen(false);
   };
 
   return (
@@ -445,20 +431,8 @@ export default function App() {
         isOpen={cartOpen}
         onClose={() => setCartOpen(false)}
         cartItems={cart}
-        onRemoveItem={handleRemoveItem}
-        onCompleteOrder={handleCompleteOrder}
+        onRemoveItem={removeFromCart}
       />
-
-      {completedOrder && (
-        <OrderDownloadScreen
-          orderItems={completedOrder}
-          orderMeta={orderMeta}
-          onDone={() => {
-            setCompletedOrder(null);
-            setOrderMeta(null);
-          }}
-        />
-      )}
 
       {/* Global Toast Notification */}
       {toastMessage && (

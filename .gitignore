@@ -28,3 +28,10 @@ dist-ssr
 .env.*
 !.env.example
 *.pem
+*.key
+credentials.json
+service-account*.json
+
+# Local editor / agent tooling (not for the public repo)
+.cursor/
+.agents/

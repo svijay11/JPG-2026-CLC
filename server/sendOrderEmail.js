@@ -18,6 +18,7 @@ function escapeHtml(value) {
 function buildEmailBodies(orderMeta = {}, orderSummary = '') {
   const orderId = orderMeta.orderId || 'Unknown order';
   const buyerName = orderMeta.buyerName || 'Customer';
+  const buyerEmail = orderMeta.buyerEmail || '';
   const subject = `New label order ${orderId} — Idyll Time Wines`;
 
   const text = [
@@ -25,19 +26,21 @@ function buildEmailBodies(orderMeta = {}, orderSummary = '') {
     '',
     `Order: ${orderId}`,
     `Customer: ${buyerName}`,
+    buyerEmail ? `Email: ${buyerEmail}` : null,
     `Date: ${orderMeta.orderDate || new Date().toISOString()}`,
     `Delivery: ${orderMeta.deliveryMethod || 'pickup'}`,
     '',
     orderSummary || '(No summary)',
     '',
     'The full print-ready PDF is attached.'
-  ].join('\n');
+  ].filter((line) => line !== null).join('\n');
 
   const html = `
     <div style="font-family: Georgia, serif; color: #1a1a1a; line-height: 1.5;">
       <h2 style="margin: 0 0 12px;">New custom label order</h2>
       <p style="margin: 0 0 8px;"><strong>Order:</strong> ${escapeHtml(orderId)}</p>
       <p style="margin: 0 0 8px;"><strong>Customer:</strong> ${escapeHtml(buyerName)}</p>
+      ${buyerEmail ? `<p style="margin: 0 0 8px;"><strong>Email:</strong> ${escapeHtml(buyerEmail)}</p>` : ''}
       <p style="margin: 0 0 8px;"><strong>Delivery:</strong> ${escapeHtml(orderMeta.deliveryMethod || 'pickup')}</p>
       <pre style="margin: 16px 0; padding: 12px; background: #f7f5f0; border-radius: 8px; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 13px;">${escapeHtml(orderSummary || '')}</pre>
       <p style="margin: 0; color: #555;">The full print-ready PDF is attached (receipt + customer + designer pages).</p>

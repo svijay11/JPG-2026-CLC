@@ -44,6 +44,8 @@ function generateBuyerId() {
 }
 
 function paymentLabel(method) {
+  if (method === 'square') return 'Paid with Square';
+  if (method === 'stripe') return 'Paid with Stripe';
   if (method === 'apple') return 'Paid via Apple Pay';
   if (method === 'google') return 'Paid via Google Pay';
   if (method === 'card') return 'Paid via Credit Card';
@@ -161,6 +163,7 @@ function drawReceiptPage(pdf, items, orderMeta) {
   const rightEdge = pageW - 18;
   const orderId = orderMeta.orderId || generateOrderId();
   const buyerName = orderMeta.buyerName || 'Customer';
+  const buyerEmail = orderMeta.buyerEmail || '';
   const buyerId = orderMeta.buyerId || generateBuyerId();
   const orderDate = orderMeta.orderDate
     ? formatOrderDate(new Date(orderMeta.orderDate))
@@ -193,6 +196,9 @@ function drawReceiptPage(pdf, items, orderMeta) {
   leftY = drawLeftField(pdf, leftX, leftY, 'Order', [orderId]);
   leftY = drawLeftField(pdf, leftX, leftY, 'Order date', [orderDate]);
   leftY = drawLeftField(pdf, leftX, leftY, 'Buyer', [`${buyerName} (${buyerId})`]);
+  if (buyerEmail) {
+    leftY = drawLeftField(pdf, leftX, leftY, 'Email', [buyerEmail]);
+  }
   leftY = drawLeftField(pdf, leftX, leftY, 'Payment method', [payment]);
   drawLeftField(pdf, leftX, leftY, 'Delivery', getDeliveryLines(orderMeta));
 
